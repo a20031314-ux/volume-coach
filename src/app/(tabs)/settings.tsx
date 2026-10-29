@@ -147,6 +147,24 @@ export default function SettingsScreen() {
         ))}
       </Card>
 
+      <T v="label">운동 진행 방식</T>
+      <Card>
+        <View style={{ gap: 6 }}><T v="muted">기본 기록 단위</T>
+          <Segmented options={[{ v: 'exercise', n: '운동별' }, { v: 'set', n: '세트별' }]} value={s.session.detail}
+            onChange={(v) => v && update({ session: { ...s.session, detail: v } })} />
+        </View>
+        <T v="small">운동별은 운동마다 세트 수만 확인하고 완료해요. 세트별은 세트마다 완료를 누르고 휴식 타이머가 돌아가요. 운동 중에도 바꿀 수 있어요.</T>
+        <View style={{ gap: 6 }}><T v="muted">세트별 기록에서 함께 남길 것</T>
+          <Pills
+            options={[{ k: 'setInputs', n: '중량·반복' }, { k: 'setRpe', n: '세트별 RPE' }, { k: 'restTimer', n: '휴식 타이머·알림' }] as { k: 'setInputs' | 'setRpe' | 'restTimer'; n: string }[]}
+            value={(['setInputs', 'setRpe', 'restTimer'] as const).filter((k) => s.session[k])}
+            onToggle={(k) => update({ session: { ...s.session, [k]: !s.session[k] } })} />
+        </View>
+        <Row gap={Space.md}>
+          <NumField label="자동 종료 (분, 0 = 끔)" value={s.session.autoEndMin} onCommit={(v) => v != null && update({ session: { ...s.session, autoEndMin: v } })} />
+        </Row>
+      </Card>
+
       <T v="label">운동 규칙</T>
       <Card>
         <Row gap={Space.md}>{num('min', '부위당 주간 최소 세트')}{num('max', '부위당 주간 최대 세트')}</Row>

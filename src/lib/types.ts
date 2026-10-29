@@ -19,6 +19,8 @@ export interface WorkoutLog extends SyncMeta {
   kg?: number | null;
   reps?: string;
   at: number;            // epoch ms when logged
+  /** set when the log was written by a workout session */
+  sessionId?: string;
 }
 
 export interface Checkin extends SyncMeta {
@@ -62,6 +64,58 @@ export interface Run extends SyncMeta {
   route: [number, number, number][];
 }
 
+export type SessionDetail = 'exercise' | 'set';
+
+export interface SessionSet {
+  at: number;
+  kg?: number | null;
+  reps?: number | null;
+  rpe?: number | null;
+}
+
+export type ExerciseStatus = 'pending' | 'active' | 'done' | 'skipped';
+
+export interface SessionExercise {
+  key: string;
+  name: string;
+  muscle: MuscleKey;
+  planned: number;
+  status: ExerciseStatus;
+  startedAt?: number | null;
+  endedAt?: number | null;
+  /** per-set detail (세트별 모드) */
+  sets: SessionSet[];
+  /** set count confirmed in 운동별 모드 */
+  doneSets?: number | null;
+  /** WorkoutLog this exercise writes to */
+  logId: string;
+}
+
+/** A workout from 시작 to 끝, with a timeline per exercise and per set. */
+export interface Session extends SyncMeta {
+  date: string;
+  startedAt: number;
+  endedAt: number | null;
+  lastActivityAt: number;
+  detail: SessionDetail;
+  rpe?: number | null;
+  autoEnded?: boolean;
+  exercises: SessionExercise[];
+}
+
+export interface SessionOptions {
+  /** default detail level for new sessions */
+  detail: SessionDetail;
+  /** ask weight and reps for each set (prefilled from last time) */
+  setInputs: boolean;
+  /** ask RPE after each set */
+  setRpe: boolean;
+  /** count down rest between sets and notify when it's over */
+  restTimer: boolean;
+  /** end a forgotten session after this many idle minutes */
+  autoEndMin: number;
+}
+
 export interface Food { n: string; k: number; p: number; c: number; f: number }
 export interface CustomExercise { n: string; m: MuscleKey }
 
@@ -83,6 +137,7 @@ export interface Settings {
   customExercises: CustomExercise[];
   foods: Food[];
   profile: Profile;
+  session: SessionOptions;
   updatedAt: number;
 }
 
@@ -90,5 +145,6 @@ export const DEFAULT_SETTINGS: Settings = {
   min: 12, max: 18, minEx: 2, gap: 1, cap: 24, mcap: 10, weekStart: 1, sec: 0.5,
   ready: 70, deload: false, off: [], customExercises: [], foods: [],
   profile: { goal: 'hyp', act: '1' },
+  session: { detail: 'exercise', setInputs: true, setRpe: false, restTimer: true, autoEndMin: 90 },
   updatedAt: 0,
 };

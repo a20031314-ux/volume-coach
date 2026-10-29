@@ -12,6 +12,7 @@ import { buildPlan, deloadHint, suggestExercises } from '@/lib/coach';
 import { dow, fmt } from '@/lib/dates';
 import { MUSCLES } from '@/lib/exercises';
 import { repRange } from '@/lib/profile';
+import { selectActiveSession, startSession } from '@/store/session-actions';
 import { live, useData } from '@/store/store';
 
 export default function Today() {
@@ -25,6 +26,7 @@ export default function Today() {
   const setCheckin = useData((s) => s.setCheckin);
   const [swaps, setSwaps] = useState<Record<string, number>>({});
   const [draft, setDraft] = useState<LogDraft | null>(null);
+  const running = useData(selectActiveSession);
 
   const plan = useMemo(() => buildPlan(result, live(logs)), [result, logs]);
   const hint = useMemo(() => deloadHint(result, input), [result, input]);
@@ -63,6 +65,23 @@ export default function Today() {
         <Row gap={4} style={{ alignItems: 'baseline' }}><T v="big">{total}</T><T v="muted">세트 남음</T></Row>
         <Row gap={4} style={{ alignItems: 'baseline' }}><T v="big">{plan.plan.length}</T><T v="muted">부위</T></Row>
       </Row>
+
+      {running ? (
+        <Card style={{ borderColor: c.accent, borderWidth: 2 }}>
+          <T v="title">운동 진행 중</T>
+          <T v="muted">
+            {new Date(running.startedAt).toTimeString().slice(0, 5)} 시작 · 운동 {running.exercises.filter((e) => e.status === 'done').length}/{running.exercises.length}개
+          </T>
+          <Button label="이어서 하기" kind="primary" onPress={() => router.push({ pathname: '/session', params: { id: running.id } })} style={{ paddingVertical: 13 }} />
+        </Card>
+      ) : (
+        <Button label={plan.plan.length ? '운동 시작' : '빈 운동으로 시작'} kind="primary" style={{ paddingVertical: 15 }}
+          onPress={() => {
+            const list = plan.plan.flatMap((s) => suggestExercises(s, result, settings, swaps).map((e) => ({ name: e.name, muscle: s.k, sets: e.sets })));
+            const sid = startSession(list, settings.session.detail);
+            router.push({ pathname: '/session', params: { id: sid } });
+          }} />
+      )}
 
       {!plan.plan.length ? (
         <Card><T v="muted" style={{ textAlign: 'center' }}>오늘 채울 부위가 없어요. 이번 주 최소치를 채웠거나 남은 부위가 아직 회복 중이에요.</T></Card>

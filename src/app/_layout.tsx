@@ -35,6 +35,7 @@ export default function RootLayout() {
             <StatusBar style="auto" />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="session" options={{ gestureEnabled: false }} />
               <Stack.Screen name="account" options={{ presentation: 'modal', headerShown: true, title: '계정' }} />
             </Stack>
           </ToastProvider>
