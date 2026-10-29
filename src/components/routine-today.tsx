@@ -12,6 +12,7 @@ import type { MuscleKey, Routine, Session } from '@/lib/types';
 import { startSession } from '@/store/session-actions';
 import { live, useData } from '@/store/store';
 
+import { ExName } from './exercise-menu';
 import { Banner, Button, Card, Chip, Pills, Row, T, toneColor } from './ui';
 
 /** 루틴형 today: the routine day that's up, with a recovery check and a way to pick another day. */
@@ -67,7 +68,7 @@ export function RoutineToday({ routine, result, running }: { routine: Routine; r
         {day?.exercises.map((e, i) => (
           <Row key={`${e.name}-${i}`} style={{ flexWrap: 'nowrap', borderTopWidth: 1, borderStyle: 'dashed', borderColor: c.line, paddingTop: Space.sm }}>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <T>{e.name}</T>
+              <ExName name={e.name} />
               <T v="small">
                 {MUSCLE_NAME[e.muscle]} · 회복 <T v="small" style={{ color: toneColor(c, recovery[e.muscle] ?? 100, settings.ready) }}>{recovery[e.muscle] ?? 100}%</T> · {repRange(e.name, settings.profile)}
               </T>

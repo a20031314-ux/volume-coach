@@ -64,6 +64,9 @@ function withDefaults(p: Partial<Settings> | undefined): Settings {
     profile: { ...DEFAULT_SETTINGS.profile, ...(p?.profile ?? {}) },
     session: { ...DEFAULT_SETTINGS.session, ...(p?.session ?? {}) },
     checkin: { ...DEFAULT_SETTINGS.checkin, ...(p?.checkin ?? {}) },
+    ability: { ...DEFAULT_SETTINGS.ability, ...(p?.ability ?? {}) },
+    exercisePrefs: p?.exercisePrefs ?? {},
+    dismissed: p?.dismissed ?? [],
     run: { ...DEFAULT_SETTINGS.run, ...(p?.run ?? {}), interval: { ...DEFAULT_SETTINGS.run.interval, ...(p?.run?.interval ?? {}) } },
   };
 }

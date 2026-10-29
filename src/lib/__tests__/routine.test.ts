@@ -41,9 +41,15 @@ describe('recommended routines', () => {
     expect(r.days.flatMap((d) => d.exercises).some((e) => e.muscle === 'shoulder')).toBe(false);
   });
 
-  it('opens each day with a compound lift at the gym', () => {
-    const r = make();
-    expect(HEAVY.has(r.days[0].exercises[0].name) || r.days[0].exercises[0].name === '풀업').toBe(true);
+  it('opens each day with a compound lift at the gym once barbell skills are known', () => {
+    const ability = { checked: true, pullups: '6+', pushups: '21+', dips: 'yes', bbSquat: 'yes', bbHinge: 'yes', bbPress: 'yes', pain: [] } as const;
+    const r = recommendRoutine({ profile: profile(), settings: { ...DEFAULT_SETTINGS, ability: { ...ability, pain: [] } } });
+    expect(HEAVY.has(r.days[0].exercises[0].name)).toBe(true);
+  });
+
+  it('starts with easy-to-learn lifts before the ability check', () => {
+    const names = make().days.flatMap((d) => d.exercises.map((e) => e.name));
+    for (const n of ['백스쿼트', '컨벤셔널 데드리프트', '풀업', '딥스']) expect(names).not.toContain(n);
   });
 });
 

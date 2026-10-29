@@ -91,6 +91,16 @@ export default function SettingsScreen() {
         </Row>
       </Card>
 
+      <T v="label">할 수 있는 운동</T>
+      <Card>
+        <T>{s.ability.checked ? '체크 완료' : '아직 체크하지 않았어요 · 쉬운 운동부터 추천 중'}{Object.keys(s.exercisePrefs).length ? ` · 표시한 운동 ${Object.keys(s.exercisePrefs).length}개` : ''}</T>
+        <T v="small">턱걸이·푸시업 개수, 바벨 경험, 불편한 동작과 운동별 표시(즐겨찾기·안 함·못 함)를 추천·루틴·교체에 모두 반영해요.</T>
+        <Row>
+          <Button label={s.ability.checked ? '다시 체크' : '체크하기'} kind="primary" onPress={() => router.push('/ability')} />
+          <Button label="운동 목록" onPress={() => router.push('/exercises')} />
+        </Row>
+      </Card>
+
       <T v="label">내 정보</T>
       <Card>
         <Row gap={Space.md}>

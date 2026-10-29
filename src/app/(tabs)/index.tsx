@@ -12,6 +12,8 @@ import { useNow } from '@/hooks/use-now';
 import { buildPlan, deloadHint, suggestExercises } from '@/lib/coach';
 import { dow, fmt } from '@/lib/dates';
 import { MUSCLES } from '@/lib/exercises';
+import { ExName } from '@/components/exercise-menu';
+import { abilityHints, knownExercises } from '@/lib/ability';
 import { repRange } from '@/lib/profile';
 import { selectActiveSession, startSession } from '@/store/session-actions';
 import { live, useData } from '@/store/store';
@@ -34,6 +36,9 @@ export default function Today() {
   const routineMode = settings.planMode === 'routine' && !!routine && !routine.deleted;
 
   const plan = useMemo(() => buildPlan(result, live(logs)), [result, logs]);
+  const known = useMemo(() => knownExercises(live(logs)), [logs]);
+  const sessionsT = useData((s) => s.sessions);
+  const hints = useMemo(() => abilityHints(settings, live(sessionsT), now.getTime()), [settings, sessionsT, now]);
   const hint = useMemo(() => deloadHint(result, input), [result, input]);
   const total = plan.plan.reduce((a, s) => a + s.remaining, 0);
   const rd = result.readiness;
@@ -43,6 +48,18 @@ export default function Today() {
   return (
     <Screen title="오늘" sub={`${fmt(result.W)} – ${fmt(result.E)} · 남은 ${result.daysLeft}일${settings.deload ? ' · 디로드' : ''}`}>
       {hint ? <Banner text={hint} /> : null}
+      {hints.map((h) => (
+        <Card key={h.key} style={{ borderColor: c.accent }}>
+          <T>{h.text}</T>
+          <Row>
+            <Button label={h.action.label} kind="primary" onPress={() => {
+              if ('route' in h.action) router.push(h.action.route as '/ability');
+              else { updateSettings({ ...h.action.patch, dismissed: [...settings.dismissed, h.key] }); toast('반영했어요'); }
+            }} />
+            <Button label={h.key === 'ability-intro' ? '나중에' : '괜찮아요'} kind="ghost" onPress={() => updateSettings({ dismissed: [...settings.dismissed, h.key] })} />
+          </Row>
+        </Card>
+      ))}
 
       {ck.sleep || ck.energy || ck.sore ? (
         <Card>
@@ -105,7 +122,7 @@ export default function Today() {
       ) : (
         <Button label={plan.plan.length ? '운동 시작' : '빈 운동으로 시작'} kind="primary" style={{ paddingVertical: 15 }}
           onPress={() => {
-            const list = plan.plan.flatMap((s) => suggestExercises(s, result, settings, swaps).map((e) => ({ name: e.name, muscle: s.k, sets: e.sets })));
+            const list = plan.plan.flatMap((s) => suggestExercises(s, result, settings, swaps, known).map((e) => ({ name: e.name, muscle: s.k, sets: e.sets })));
             const sid = startSession(list, settings.session.detail);
             router.push({ pathname: '/session', params: { id: sid } });
           }} />
@@ -116,7 +133,7 @@ export default function Today() {
       ) : null}
 
       {plan.plan.map((s) => {
-        const ex = suggestExercises(s, result, settings, swaps);
+        const ex = suggestExercises(s, result, settings, swaps, known);
         return (
           <Card key={s.k}>
             <Row style={{ justifyContent: 'space-between' }}>
@@ -132,7 +149,7 @@ export default function Today() {
             {ex.map((e) => (
               <View key={e.slot} style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: c.line, paddingTop: Space.sm, flexDirection: 'row', alignItems: 'center', gap: Space.sm }}>
                 <View style={{ flex: 1, minWidth: 0 }}>
-                  <T>{e.name}</T>
+                  <ExName name={e.name} />
                   <T v="small">{[repRange(e.name, settings.profile), e.isNew && s.names.length < settings.minEx ? '이번 주 새 종류' : e.heavy ? '고중량 복합' : ''].filter(Boolean).join(' · ')}</T>
                 </View>
                 <T v="num">{e.sets}<T v="small">세트</T></T>

@@ -3,10 +3,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { ExName } from '@/components/exercise-menu';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, Chip, ConfirmButton, Pills, Row, Segmented, Stepper, T } from '@/components/ui';
 import { Radius, Space, usePalette } from '@/constants/theme';
-import { MUSCLES, MUSCLE_NAME, library } from '@/lib/exercises';
+import { knownExercises, pickable } from '@/lib/ability';
+import { MUSCLES, MUSCLE_NAME } from '@/lib/exercises';
 import { repRange } from '@/lib/profile';
 import { fmtDuration } from '@/lib/run';
 import { lastPerformance, prefill, restSeconds, setCount, shouldAutoEnd, summarize } from '@/lib/session';
@@ -128,7 +130,7 @@ function TimelineItem({ ex, session, last, lastPerf }: {
           <View style={{ paddingVertical: Space.md, gap: 4 }}>
             <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
               <View style={{ flexShrink: 1 }}>
-                <T v="title" style={{ fontSize: 16 }}>{ex.name}</T>
+                <ExName v="title" style={{ fontSize: 16 }} name={ex.name} />
                 <T v="small">
                   {MUSCLE_NAME[ex.muscle]} · {ex.status === 'done' ? `${n}세트` : ex.status === 'skipped' ? '건너뜀' : `${ex.planned}세트 예정`}
                   {ex.startedAt && ex.endedAt ? ` · ${clock(ex.startedAt)}–${clock(ex.endedAt)}` : ''}
@@ -180,7 +182,7 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
     <Card style={{ borderColor: c.accent, borderWidth: 2, marginTop: Space.xs }}>
       <View>
         <Row style={{ justifyContent: 'space-between' }}>
-          <T v="title">{ex.name}</T>
+          <ExName v="title" name={ex.name} />
           <Chip label={setMode ? `${n} / ${ex.planned}세트` : `${ex.planned}세트 예정`} tone="accent" />
         </Row>
         <T v="small">{MUSCLE_NAME[ex.muscle]} · {repRange(ex.name, profile)}</T>
@@ -278,9 +280,10 @@ function RestBar() {
 }
 
 function AddExercise({ onAdd, onCancel }: { onAdd: (name: string, m: MuscleKey) => void; onCancel: () => void }) {
-  const custom = useData((s) => s.settings.customExercises);
+  const settings = useData((s) => s.settings);
+  const logsT = useData((s) => s.logs);
   const [m, setM] = useState<MuscleKey>('chest');
-  const opts = useMemo(() => library(custom).filter((e) => e.m === m), [custom, m]);
+  const opts = useMemo(() => pickable(m, { ...settings, known: knownExercises(live(logsT)) }), [settings, logsT, m]);
   return (
     <Card>
       <T v="title">운동 추가</T>

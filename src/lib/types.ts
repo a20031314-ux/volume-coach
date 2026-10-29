@@ -139,6 +139,23 @@ export interface SessionOptions {
   autoEndMin: number;
 }
 
+export type PainMove = 'overhead' | 'deepKnee' | 'spine' | 'wrist' | 'deepShoulder';
+export type Tri = 'unknown' | 'yes' | 'no';
+
+/** What the user can do, from the quick check. 'unknown' = not answered. */
+export interface Ability {
+  checked: boolean;
+  pullups: 'unknown' | '0' | '1-5' | '6+';
+  pushups: 'unknown' | '0-5' | '6-20' | '21+';
+  dips: Tri;
+  bbSquat: Tri;
+  bbHinge: Tri;
+  bbPress: Tri;
+  pain: PainMove[];
+}
+
+export type ExercisePref = 'fav' | 'dislike' | 'cant';
+
 export interface CheckinOptions {
   sleep: boolean;
   energy: boolean;
@@ -195,6 +212,11 @@ export interface Settings {
   profile: Profile;
   session: SessionOptions;
   run: RunOptions;
+  ability: Ability;
+  /** per-exercise marks: favourite, rather not, can't do */
+  exercisePrefs: Record<string, ExercisePref>;
+  /** hint cards the user dismissed */
+  dismissed: string[];
   /** which readiness signals adjust the plan; all off hides the check-in card */
   checkin: CheckinOptions;
   /** 자율형: rules + daily recommendation · 루틴형: follow a routine */
@@ -209,6 +231,9 @@ export const DEFAULT_SETTINGS: Settings = {
   profile: { goal: 'hyp', act: '1' },
   session: { detail: 'exercise', setInputs: true, setRpe: false, restTimer: true, autoEndMin: 90 },
   checkin: { sleep: true, energy: true, sore: true, systemic: true },
+  ability: { checked: false, pullups: 'unknown', pushups: 'unknown', dips: 'unknown', bbSquat: 'unknown', bbHinge: 'unknown', bbPress: 'unknown', pain: [] },
+  exercisePrefs: {},
+  dismissed: [],
   planMode: 'auto',
   activeRoutineId: null,
   run: {

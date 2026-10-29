@@ -1,3 +1,4 @@
+import { candidatesFor } from './ability';
 import { addDays, diffDays, iso, parse } from './dates';
 import { BIG_MUSCLES, HALF_LIFE, HEAVY, MUSCLES, MUSCLE_NAME, library, type Exercise } from './exercises';
 import { recoveryMultiplier } from './profile';
@@ -227,8 +228,10 @@ export function buildPlan(c: CoachResult, logs: WorkoutLog[]): Plan {
 export interface Suggestion { name: string; sets: number; isNew: boolean; heavy: boolean; slot: number }
 
 /** swaps: "muscle:slot" → how many times the user tapped 교체 */
-export function suggestExercises(s: MuscleStat, c: CoachResult, settings: Settings, swaps: Record<string, number>): Suggestion[] {
-  let pool = library(settings.customExercises).filter((e) => e.m === s.k).map((e) => e.n);
+export function suggestExercises(s: MuscleStat, c: CoachResult, settings: Settings, swaps: Record<string, number>, known?: Set<string>): Suggestion[] {
+  let pool = candidatesFor(s.k, { ...settings, known }).map((e) => e.n);
+  // nothing fits (e.g. every option marked): fall back to anything not marked "can't"
+  if (!pool.length) pool = library(settings.customExercises).filter((e) => e.m === s.k && settings.exercisePrefs?.[e.n] !== 'cant').map((e) => e.n);
   const avoidHeavy = s.mode === 'light' || c.readiness.ratio > 1.3 || s.recPre < 85;
   if (avoidHeavy) pool = pool.filter((n) => !HEAVY.has(n)).concat(pool.filter((n) => HEAVY.has(n)));
   const needNew = Math.max(0, settings.minEx - s.names.length);

@@ -2,12 +2,14 @@ import { useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
+import { ExName } from '@/components/exercise-menu';
 import { useToast } from '@/components/toast';
 import { Button, Card, ConfirmButton, DayNav, Field, NumField, Pills, Row, Screen, Segmented, Stepper, T } from '@/components/ui';
 import { WeekView } from '@/components/week-view';
 import { Space, usePalette } from '@/constants/theme';
 import { addDays, fmt, today } from '@/lib/dates';
 import { MUSCLES, MUSCLE_NAME, library } from '@/lib/exercises';
+import { knownExercises, pickable } from '@/lib/ability';
 import { repRange } from '@/lib/profile';
 import type { MuscleKey } from '@/lib/types';
 import { live, useData } from '@/store/store';
@@ -40,8 +42,8 @@ export default function Log() {
     if (m && MUSCLE_NAME[m]) { setMuscle(m); setExercise(null); setDate(today()); setView('log'); }
   }
 
-  const options = library(settings.customExercises).filter((e) => e.m === muscle);
   const logs = useMemo(() => live(logsT), [logsT]);
+  const options = pickable(muscle, { ...settings, known: knownExercises(logs) });
   const days = useMemo(() => {
     const by: Record<string, typeof logs> = {};
     for (const l of logs) (by[l.date] ??= []).push(l);
@@ -105,7 +107,7 @@ export default function Log() {
           {rows.map((l) => (
             <View key={l.id} style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: 8, borderBottomWidth: 1, borderColor: c.line }}>
               <View style={{ flex: 1, minWidth: 0 }}>
-                <T>{l.exercise}</T>
+                <ExName name={l.exercise} />
                 <T v="small">{MUSCLE_NAME[l.muscle]}{l.kg ? ` · ${l.kg}kg` : ''}{l.reps ? ` × ${l.reps}` : ''}</T>
               </View>
               <T v="num" style={{ fontSize: 17 }}>{l.sets}세트</T>

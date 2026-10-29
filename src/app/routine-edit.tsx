@@ -8,10 +8,11 @@ import { Button, Card, ConfirmButton, Field, Pills, Row, Segmented, T } from '@/
 import { VolumeCheckView } from '@/components/volume-check';
 import { Space, usePalette } from '@/constants/theme';
 import { DOW } from '@/lib/dates';
-import { MUSCLES, MUSCLE_NAME, available, library } from '@/lib/exercises';
+import { MUSCLES, MUSCLE_NAME } from '@/lib/exercises';
+import { knownExercises, pickable } from '@/lib/ability';
 import { alternatives, defaultWeekdays, weeklyVolume } from '@/lib/routine';
 import type { MuscleKey, Routine, RoutineDay } from '@/lib/types';
-import { newId, useData } from '@/store/store';
+import { live, newId, useData } from '@/store/store';
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0];
 
@@ -23,6 +24,8 @@ export default function RoutineEditor() {
   const stored = useData((x) => (id ? x.routines[id] : undefined));
   const settings = useData((x) => x.settings);
   const putRoutine = useData((x) => x.putRoutine);
+  const logsT = useData((x) => x.logs);
+  const known = useMemo(() => knownExercises(live(logsT)), [logsT]);
   const update = useData((x) => x.updateSettings);
   const [draft, setDraft] = useState<Routine | null>(() => (stored ? structuredClone(stored) : null));
   const [adding, setAdding] = useState<string | null>(null);
@@ -94,7 +97,7 @@ export default function RoutineEditor() {
                 <Row>
                   <Button label="교체" kind="ghost" onPress={() => change((r) => {
                     const x = day(r, d.key).exercises[ei];
-                    const alts = alternatives(x.name, x.muscle, settings, eq).filter((n) => !day(r, d.key).exercises.some((y) => y.name === n));
+                    const alts = alternatives(x.name, x.muscle, { ...settings, profile: { ...settings.profile, equipment: eq }, known }).filter((n) => !day(r, d.key).exercises.some((y) => y.name === n));
                     if (alts.length) x.name = alts[0];
                   })} />
                   <Button label="↑" kind="ghost" accessibilityLabel="위로" disabled={ei === 0}
@@ -107,7 +110,7 @@ export default function RoutineEditor() {
               </View>
             ))}
             {adding === d.key
-              ? <AddPicker equipment={eq} onAdd={(name, muscle) => { change((r) => { day(r, d.key).exercises.push({ name, muscle, sets: 3 }); }); setAdding(null); }} onCancel={() => setAdding(null)} />
+              ? <AddPicker known={known} onAdd={(name, muscle) => { change((r) => { day(r, d.key).exercises.push({ name, muscle, sets: 3 }); }); setAdding(null); }} onCancel={() => setAdding(null)} />
               : <Button label="+ 운동 추가" onPress={() => setAdding(d.key)} />}
             <T v="small">{d.exercises.length}개 · {d.exercises.reduce((a, e) => a + e.sets, 0)}세트</T>
           </Card>
@@ -142,10 +145,10 @@ export default function RoutineEditor() {
   );
 }
 
-function AddPicker({ equipment, onAdd, onCancel }: { equipment: 'gym' | 'dumbbell' | 'bodyweight'; onAdd: (name: string, m: MuscleKey) => void; onCancel: () => void }) {
-  const custom = useData((x) => x.settings.customExercises);
+function AddPicker({ known, onAdd, onCancel }: { known: Set<string>; onAdd: (name: string, m: MuscleKey) => void; onCancel: () => void }) {
+  const settings = useData((x) => x.settings);
   const [m, setM] = useState<MuscleKey>('chest');
-  const opts = library(custom).filter((e) => e.m === m && available(e, equipment));
+  const opts = pickable(m, { ...settings, known }, true);
   return (
     <View style={{ gap: Space.sm }}>
       <Pills options={MUSCLES} value={m} onToggle={setM} />

@@ -1,5 +1,6 @@
 /** Routines: recommended splits, weekly volume checks, and which day is up today. Pure functions. */
-import { HEAVY, MUSCLES, MUSCLE_NAME, available, library, type Equipment, type Exercise } from './exercises';
+import { candidates, substitutes, type AbilityCtx } from './ability';
+import { HEAVY, MUSCLES, MUSCLE_NAME, library, type Equipment, type Exercise } from './exercises';
 import { recommendedVolume } from './profile';
 import type { Goal, MuscleKey, Profile, Routine, RoutineDay, Session, Settings } from './types';
 
@@ -48,16 +49,23 @@ export function defaultWeekdays(n: number): number[][] {
 
 const SMALL = new Set<MuscleKey>(['bi', 'tri', 'calf', 'abs']);
 
-export interface RecommendOptions { profile: Profile; settings: Pick<Settings, 'customExercises'>; schedule?: Routine['schedule'] }
+export interface RecommendOptions {
+  profile: Profile;
+  settings: Pick<Settings, 'customExercises' | 'ability' | 'exercisePrefs'>;
+  schedule?: Routine['schedule'];
+  /** exercises logged before */
+  known?: Set<string>;
+}
 
 /** Build a recommended routine from the profile: split by days and experience, sets by goal and age, exercises by equipment. */
-export function recommendRoutine({ profile, settings, schedule = 'rotation' }: RecommendOptions): Omit<Routine, 'id' | 'updatedAt'> {
+export function recommendRoutine({ profile, settings, schedule = 'rotation', known }: RecommendOptions): Omit<Routine, 'id' | 'updatedAt'> {
   const days = profile.days ?? 4;
   const split = splitFor(days, profile.years);
   const { rec } = recommendedVolume(profile);
   const eq: Equipment = profile.equipment ?? 'gym';
   const avoid = new Set(profile.avoid ?? []);
-  const lib = library(settings.customExercises).filter((e) => available(e, eq));
+  // only exercises this user can and wants to do, favourites and familiar ones first
+  const lib = candidates({ ability: settings.ability, exercisePrefs: settings.exercisePrefs, customExercises: settings.customExercises, profile: { ...profile, equipment: eq }, known });
   // per-session set budget: about 3 minutes per working set including rest
   const budget = Math.min(rec.cap, Math.max(8, Math.floor((profile.sessionMin ?? 60) / 3)));
 
@@ -195,7 +203,7 @@ export function betterDay(r: Routine, current: number, recovery: Partial<Record<
   return best;
 }
 
-/** Same-muscle alternatives for swapping an exercise, respecting equipment. */
-export function alternatives(name: string, muscle: MuscleKey, settings: Pick<Settings, 'customExercises'>, eq: Equipment = 'gym'): string[] {
-  return library(settings.customExercises).filter((e) => e.m === muscle && e.n !== name && available(e, eq)).map((e) => e.n);
+/** Same-muscle alternatives for swapping an exercise: what the user can do, same movement first. */
+export function alternatives(name: string, muscle: MuscleKey, ctx: AbilityCtx): string[] {
+  return substitutes(name, muscle, ctx);
 }

@@ -9,6 +9,7 @@ import { VolumeCheckView } from '@/components/volume-check';
 import { Space, usePalette } from '@/constants/theme';
 import { DOW } from '@/lib/dates';
 import { MUSCLES } from '@/lib/exercises';
+import { knownExercises } from '@/lib/ability';
 import { defaultWeekdays, recommendRoutine, weeklyVolume } from '@/lib/routine';
 import type { Profile, Routine } from '@/lib/types';
 import { live, newId, useData } from '@/store/store';
@@ -29,7 +30,9 @@ export default function RoutineHub() {
 
   const p = s.profile;
   const setP = (patch: Partial<Profile>) => update({ profile: { ...p, ...patch } });
-  const rec = useMemo(() => recommendRoutine({ profile: p, settings: s, schedule }), [p, s, schedule]);
+  const logsT = useData((x) => x.logs);
+  const known = useMemo(() => knownExercises(live(logsT)), [logsT]);
+  const rec = useMemo(() => recommendRoutine({ profile: p, settings: s, schedule, known }), [p, s, schedule, known]);
   const recVol = useMemo(() => weeklyVolume(rec, s, p.days), [rec, s, p.days]);
   const routines = useMemo(() => live(routinesT).sort((a, b) => b.updatedAt - a.updatedAt), [routinesT]);
 
@@ -74,6 +77,12 @@ export default function RoutineHub() {
 
           <T v="label">추천 루틴</T>
           <Card>
+            {!s.ability.checked ? (
+              <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+                <T v="small" style={{ flexShrink: 1 }}>할 수 있는 운동을 체크하면 추천이 더 정확해져요. 지금은 쉬운 운동 위주예요.</T>
+                <Button label="체크하기" onPress={() => router.push('/ability')} />
+              </Row>
+            ) : null}
             <Row gap={Space.md}>
               <Stepper label="주 운동 일수" value={p.days ?? 4} min={2} max={6} onChange={(days) => setP({ days })} />
               <Stepper label="1회 운동 (분)" value={p.sessionMin ?? 60} step={15} min={30} max={120} onChange={(sessionMin) => setP({ sessionMin })} />
