@@ -4,10 +4,10 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
   DEFAULT_SETTINGS,
-  type BodyComp, type Checkin, type Meal, type Run, type Session, type Settings, type SyncMeta, type WorkoutLog,
+  type BodyComp, type Checkin, type Meal, type Routine, type Run, type Session, type Settings, type SyncMeta, type WorkoutLog,
 } from '@/lib/types';
 
-export type Kind = 'log' | 'checkin' | 'meal' | 'body' | 'run' | 'session' | 'settings';
+export type Kind = 'log' | 'checkin' | 'meal' | 'body' | 'run' | 'session' | 'routine' | 'settings';
 
 export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 
@@ -20,6 +20,7 @@ export interface DataState {
   bodyComps: Table<BodyComp>;
   runs: Table<Run>;
   sessions: Table<Session>;
+  routines: Table<Routine>;
   settings: Settings;
   /** "kind:id" keys changed locally and not yet pushed */
   dirty: string[];
@@ -32,6 +33,8 @@ export interface DataState {
   /** create or replace a log with a known id (used by workout sessions) */
   putLog: (l: Omit<WorkoutLog, 'updatedAt'>) => void;
   putSession: (s: Omit<Session, 'updatedAt'>) => void;
+  putRoutine: (r: Omit<Routine, 'updatedAt'>) => void;
+  removeRoutine: (id: string) => void;
   setCheckin: (date: string, patch: Partial<Omit<Checkin, keyof SyncMeta | 'date'>>) => void;
   addMeal: (m: Omit<Meal, keyof SyncMeta>) => void;
   removeMeal: (id: string) => void;
@@ -47,10 +50,10 @@ export interface DataState {
   resetAll: () => void;
 }
 
-const tableOf = { log: 'logs', checkin: 'checkins', meal: 'meals', body: 'bodyComps', run: 'runs', session: 'sessions' } as const;
+const tableOf = { log: 'logs', checkin: 'checkins', meal: 'meals', body: 'bodyComps', run: 'runs', session: 'sessions', routine: 'routines' } as const;
 
 const empty = {
-  logs: {}, checkins: {}, meals: {}, bodyComps: {}, runs: {}, sessions: {},
+  logs: {}, checkins: {}, meals: {}, bodyComps: {}, runs: {}, sessions: {}, routines: {},
   settings: DEFAULT_SETTINGS, dirty: [] as string[], pulledAt: null as string | null,
 };
 
@@ -88,6 +91,15 @@ export const useData = create<DataState>()(
       putSession: (x) => {
         const rec: Session = { ...x, updatedAt: Date.now() };
         set((s) => ({ sessions: { ...s.sessions, [rec.id]: rec }, dirty: addDirty(s.dirty, `session:${rec.id}`) }));
+      },
+      putRoutine: (x) => {
+        const rec: Routine = { ...x, updatedAt: Date.now() };
+        set((s) => ({ routines: { ...s.routines, [rec.id]: rec }, dirty: addDirty(s.dirty, `routine:${rec.id}`) }));
+      },
+      removeRoutine: (id) => {
+        const cur = get().routines[id];
+        if (!cur) return;
+        set((s) => ({ routines: { ...s.routines, [id]: { ...cur, deleted: true, updatedAt: Date.now() } }, dirty: addDirty(s.dirty, `routine:${id}`) }));
       },
       setCheckin: (date, patch) => {
         const cur = get().checkins[date] ?? { id: date, date, sore: [], updatedAt: 0 };
@@ -128,7 +140,7 @@ export const useData = create<DataState>()(
       mergeRemote: (rows, cursor) => {
         set((s) => {
           const next: Partial<DataState> = {
-            logs: { ...s.logs }, checkins: { ...s.checkins }, meals: { ...s.meals }, bodyComps: { ...s.bodyComps }, runs: { ...s.runs }, sessions: { ...s.sessions },
+            logs: { ...s.logs }, checkins: { ...s.checkins }, meals: { ...s.meals }, bodyComps: { ...s.bodyComps }, runs: { ...s.runs }, sessions: { ...s.sessions }, routines: { ...s.routines },
           };
           let settings = s.settings;
           for (const r of rows) {
@@ -163,6 +175,7 @@ export const useData = create<DataState>()(
           ...Object.keys(s.bodyComps).map((id) => `body:${id}`),
           ...Object.keys(s.runs).map((id) => `run:${id}`),
           ...Object.keys(s.sessions).map((id) => `session:${id}`),
+          ...Object.keys(s.routines).map((id) => `routine:${id}`),
           ...(s.settings.updatedAt ? ['settings:main'] : []),
         ];
         set({ dirty: keys });

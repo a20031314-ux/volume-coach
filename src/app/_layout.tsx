@@ -36,6 +36,8 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="session" options={{ gestureEnabled: false }} />
+              <Stack.Screen name="routine" options={{ headerShown: true, title: '루틴 설정' }} />
+              <Stack.Screen name="routine-edit" options={{ headerShown: true, title: '루틴 편집' }} />
               <Stack.Screen name="account" options={{ presentation: 'modal', headerShown: true, title: '계정' }} />
             </Stack>
           </ToastProvider>

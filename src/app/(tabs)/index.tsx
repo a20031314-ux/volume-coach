@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { LogSheet, type LogDraft } from '@/components/log-sheet';
+import { RoutineToday } from '@/components/routine-today';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, Chip, Meter, Pills, Row, Screen, Segmented, T, fmtN, toneColor } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
@@ -27,6 +28,8 @@ export default function Today() {
   const [swaps, setSwaps] = useState<Record<string, number>>({});
   const [draft, setDraft] = useState<LogDraft | null>(null);
   const running = useData(selectActiveSession);
+  const routine = useData((s) => (s.settings.activeRoutineId ? s.routines[s.settings.activeRoutineId] : undefined));
+  const routineMode = settings.planMode === 'routine' && !!routine && !routine.deleted;
 
   const plan = useMemo(() => buildPlan(result, live(logs)), [result, logs]);
   const hint = useMemo(() => deloadHint(result, input), [result, input]);
@@ -61,6 +64,12 @@ export default function Today() {
         </View>
       </Card>
 
+      <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+        <T v="small" style={{ flexShrink: 1 }}>운동 방식 · {routineMode ? `루틴형 (${routine!.name})` : '자율형 (규칙 기반 추천)'}</T>
+        <Button label="바꾸기" kind="ghost" onPress={() => router.push('/routine')} />
+      </Row>
+
+      {routineMode ? <RoutineToday routine={routine!} result={result} running={running} /> : (<>
       <Row gap={Space.lg} style={{ alignItems: 'baseline' }}>
         <Row gap={4} style={{ alignItems: 'baseline' }}><T v="big">{total}</T><T v="muted">세트 남음</T></Row>
         <Row gap={4} style={{ alignItems: 'baseline' }}><T v="big">{plan.plan.length}</T><T v="muted">부위</T></Row>
@@ -134,6 +143,8 @@ export default function Today() {
           <Row>{plan.doneToday.map((s) => <Chip key={s.k} tone="ok" label={`${s.n} ${fmtN(s.todayS)}세트`} />)}</Row>
         </>
       ) : null}
+
+      </>)}
 
       <T v="label">부위별 회복도</T>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>

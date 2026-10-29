@@ -120,6 +120,9 @@ export interface Session extends SyncMeta {
   detail: SessionDetail;
   rpe?: number | null;
   autoEnded?: boolean;
+  /** set when the session followed a routine day */
+  routineId?: string | null;
+  dayKey?: string | null;
   exercises: SessionExercise[];
 }
 
@@ -147,6 +150,31 @@ export interface Profile {
   years?: '' | '0' | '1' | '3';
   act?: '0' | '1' | '2';
   goal: Goal;
+  /** training days per week, 2-6 */
+  days?: number | null;
+  /** minutes per session */
+  sessionMin?: number | null;
+  equipment?: 'gym' | 'dumbbell' | 'bodyweight';
+  /** muscles to keep out of plans (injury etc.) */
+  avoid?: MuscleKey[];
+}
+
+export interface RoutineExercise { name: string; muscle: MuscleKey; sets: number }
+export interface RoutineDay {
+  key: string;
+  name: string;
+  /** weekdays (0 = Sun) this day is done on, when the routine is weekday-based */
+  weekdays: number[];
+  exercises: RoutineExercise[];
+}
+/** A fixed plan to follow: days with exercises and sets. */
+export interface Routine extends SyncMeta {
+  name: string;
+  /** where it came from: a recommendation as-is, an edited recommendation, or built from scratch */
+  source: 'recommended' | 'edited' | 'custom';
+  goal?: Goal;
+  schedule: 'weekday' | 'rotation';
+  days: RoutineDay[];
 }
 
 export interface Settings {
@@ -159,6 +187,9 @@ export interface Settings {
   profile: Profile;
   session: SessionOptions;
   run: RunOptions;
+  /** 자율형: rules + daily recommendation · 루틴형: follow a routine */
+  planMode: 'auto' | 'routine';
+  activeRoutineId: string | null;
   updatedAt: number;
 }
 
@@ -167,6 +198,8 @@ export const DEFAULT_SETTINGS: Settings = {
   ready: 70, deload: false, off: [], customExercises: [], foods: [],
   profile: { goal: 'hyp', act: '1' },
   session: { detail: 'exercise', setInputs: true, setRpe: false, restTimer: true, autoEndMin: 90 },
+  planMode: 'auto',
+  activeRoutineId: null,
   run: {
     voice: true, kmAlert: true, everyMin: 0, mode: 'free',
     interval: { warmupS: 300, workS: 240, restS: 180, repeats: 5, cooldownS: 300, targetPaceS: null },

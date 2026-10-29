@@ -22,6 +22,7 @@ export default function SettingsScreen() {
   const addBody = useData((x) => x.addBodyComp);
   const removeBody = useData((x) => x.removeBodyComp);
   const dirty = useData((x) => x.dirty.length);
+  const activeRoutine = useData((x) => (x.settings.activeRoutineId ? x.routines[x.settings.activeRoutineId] : undefined));
   const [undo, setUndo] = useState<VolumeRec | null>(null);
   const [bc, setBc] = useState<{ weight: number | null; smm: number | null; fatPct: number | null }>({ weight: null, smm: null, fatPct: null });
 
@@ -77,6 +78,17 @@ export default function SettingsScreen() {
             <Button label="로그인 / 회원가입" kind="primary" onPress={() => router.push('/account')} style={{ alignSelf: 'flex-start' }} />
           </>
         )}
+      </Card>
+
+      <T v="label">운동 방식</T>
+      <Card>
+        <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+          <View style={{ flexShrink: 1 }}>
+            <T>{s.planMode === 'routine' && activeRoutine ? `루틴형 · ${activeRoutine.name}` : '자율형 · 규칙 기반 추천'}</T>
+            <T v="small">자율형, 추천 루틴, 추천 루틴 수정, 직접 짜기 중에서 고를 수 있어요.</T>
+          </View>
+          <Button label="루틴 설정" kind="primary" onPress={() => router.push('/routine')} />
+        </Row>
       </Card>
 
       <T v="label">내 정보</T>

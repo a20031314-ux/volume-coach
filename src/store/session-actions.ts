@@ -45,10 +45,10 @@ function advance(s: Session, now: number) {
   if (next) { next.status = 'active'; next.startedAt = now; }
 }
 
-export function startSession(plan: PlannedExercise[], detail: SessionDetail): string {
+export function startSession(plan: PlannedExercise[], detail: SessionDetail, routine?: { routineId: string; dayKey: string }): string {
   const id = newId();
   const s = newSession(plan, detail, Date.now(), { session: id, log: newId }, today());
-  useData.getState().putSession(s);
+  useData.getState().putSession({ ...s, routineId: routine?.routineId ?? null, dayKey: routine?.dayKey ?? null });
   return id;
 }
 

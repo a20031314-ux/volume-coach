@@ -150,7 +150,7 @@ export function Segmented<V extends string | number>({ options, value, onChange 
 }) {
   const c = usePalette();
   return (
-    <View style={{ flexDirection: 'row', gap: 4, flex: 1 }}>
+    <View style={{ flexDirection: 'row', gap: 4, flexGrow: 1, flexShrink: 1 }}>
       {options.map((o) => {
         const sel = value === o.v;
         return (
