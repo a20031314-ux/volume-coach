@@ -48,6 +48,20 @@ export interface BodyComp extends SyncMeta {
   fatPct?: number | null;    // body fat %
 }
 
+/** A finished GPS run. */
+export interface Run extends SyncMeta {
+  date: string;
+  startedAt: number;
+  endedAt: number;
+  distanceM: number;
+  movingS: number;
+  paceSecPerKm: number | null;
+  kcal: number;
+  splits: { km: number; seconds: number }[];
+  /** simplified route as [lat, lng, segment] */
+  route: [number, number, number][];
+}
+
 export interface Food { n: string; k: number; p: number; c: number; f: number }
 export interface CustomExercise { n: string; m: MuscleKey }
 

@@ -43,6 +43,17 @@ describe('coach', () => {
     expect(bad.readiness.cap).toBeLessThan(good.readiness.cap);
   });
 
+  it('lets a long run yesterday tire the legs but not the chest', () => {
+    const end = NOW.getTime() - 16 * 36e5;
+    const run = { id: 'r1', updatedAt: 0, date: addDays(T, -1), startedAt: end - 3600e3, endedAt: end, distanceM: 12000, movingS: 3600, paceSecPerKm: 300, kcal: 900, splits: [], route: [] };
+    const c = compute(input([], { runs: [run] }));
+    const quad = c.stats.find((s) => s.k === 'quad')!;
+    const calf = c.stats.find((s) => s.k === 'calf')!;
+    expect(quad.recPre).toBeLessThan(80);
+    expect(calf.recPre).toBeLessThan(100);
+    expect(c.stats.find((s) => s.k === 'chest')!.recPre).toBe(100);
+  });
+
   it('counts deleted logs as gone', () => {
     const l = log(0, '바벨 벤치프레스', 'chest', 4);
     const c = compute(input([{ ...l, deleted: true }]));

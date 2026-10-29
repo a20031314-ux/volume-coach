@@ -1,14 +1,20 @@
 import { addDays, diffDays, iso, parse } from './dates';
 import { BIG_MUSCLES, HALF_LIFE, HEAVY, MUSCLES, MUSCLE_NAME, library, type Exercise } from './exercises';
 import { recoveryMultiplier } from './profile';
-import type { Checkin, MuscleKey, Settings, WorkoutLog } from './types';
+import type { Checkin, MuscleKey, Run, Settings, WorkoutLog } from './types';
 
 export interface CoachInput {
   settings: Settings;
   logs: WorkoutLog[];
   checkins: Record<string, Checkin>;
+  runs?: Run[];
   now?: Date;
 }
+
+/** Fatigue a running km leaves on the legs, in set-equivalents. */
+export const RUN_FATIGUE_PER_KM: Partial<Record<MuscleKey, number>> = { quad: 0.6, ham: 0.5, calf: 0.8 };
+/** Systemic load of one running km, in set-equivalents. */
+export const RUN_SYSTEMIC_PER_KM = 1;
 
 export type Mode = 'go' | 'light' | 'rest';
 export type StatusTone = 'ok' | 'warn' | 'bad' | 'rest' | 'accent';
@@ -72,6 +78,15 @@ export function recoveryAt(mk: MuscleKey, when: number, input: CoachInput, befor
     if (h < 0 || h > 336) continue;
     F += c * (HEAVY.has(l.exercise) ? 1.3 : 1) * Math.pow(0.5, h / half);
   }
+  const perKm = RUN_FATIGUE_PER_KM[mk];
+  if (perKm) {
+    for (const r of input.runs ?? []) {
+      if (r.deleted || (beforeDate && r.date >= beforeDate)) continue;
+      const h = (when - r.endedAt) / H;
+      if (h < 0 || h > 336) continue;
+      F += (r.distanceM / 1000) * perKm * Math.pow(0.5, h / half);
+    }
+  }
   return Math.max(0, Math.min(100, Math.round(100 - F * 10)));
 }
 
@@ -85,6 +100,12 @@ export function readiness(input: CoachInput, T: string): Readiness {
     const h = (now - logTime(l)) / H;
     if (h < 0 || h > 336) continue;
     S += l.sets * (HEAVY.has(l.exercise) ? 1.5 : 1) * Math.pow(0.5, h / 48);
+  }
+  for (const r of input.runs ?? []) {
+    if (r.deleted || r.date >= T) continue;
+    const h = (now - r.endedAt) / H;
+    if (h < 0 || h > 336) continue;
+    S += (r.distanceM / 1000) * RUN_SYSTEMIC_PER_KM * Math.pow(0.5, h / 48);
   }
   const ratio = S / Math.max(1, s.cap);
   let f = 1;

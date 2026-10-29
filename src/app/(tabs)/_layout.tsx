@@ -14,13 +14,13 @@ export default function TabLayout() {
         <NativeTabs.Trigger.Label>기록</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'square.and.pencil', selected: 'square.and.pencil' }} md="edit_note" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="run">
+        <NativeTabs.Trigger.Label>러닝</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf={{ default: 'figure.run', selected: 'figure.run' }} md="directions_run" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="food">
         <NativeTabs.Trigger.Label>영양</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'fork.knife', selected: 'fork.knife' }} md="restaurant" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="week">
-        <NativeTabs.Trigger.Label>주간</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'chart.bar', selected: 'chart.bar.fill' }} md="bar_chart" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
         <NativeTabs.Trigger.Label>설정</NativeTabs.Trigger.Label>

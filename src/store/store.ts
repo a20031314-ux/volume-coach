@@ -4,10 +4,10 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 
 import {
   DEFAULT_SETTINGS,
-  type BodyComp, type Checkin, type Meal, type Settings, type SyncMeta, type WorkoutLog,
+  type BodyComp, type Checkin, type Meal, type Run, type Settings, type SyncMeta, type WorkoutLog,
 } from '@/lib/types';
 
-export type Kind = 'log' | 'checkin' | 'meal' | 'body' | 'settings';
+export type Kind = 'log' | 'checkin' | 'meal' | 'body' | 'run' | 'settings';
 
 export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
 
@@ -18,6 +18,7 @@ export interface DataState {
   checkins: Table<Checkin>;
   meals: Table<Meal>;
   bodyComps: Table<BodyComp>;
+  runs: Table<Run>;
   settings: Settings;
   /** "kind:id" keys changed locally and not yet pushed */
   dirty: string[];
@@ -32,6 +33,8 @@ export interface DataState {
   removeMeal: (id: string) => void;
   addBodyComp: (b: Omit<BodyComp, keyof SyncMeta>) => void;
   removeBodyComp: (id: string) => void;
+  addRun: (r: Omit<Run, keyof SyncMeta>) => void;
+  removeRun: (id: string) => void;
   updateSettings: (patch: Partial<Omit<Settings, 'updatedAt'>>) => void;
   /** merge records from the server; local wins when newer */
   mergeRemote: (rows: { kind: Kind; id: string; data: unknown; updated_at: number; deleted: boolean }[], cursor: string | null) => void;
@@ -40,10 +43,10 @@ export interface DataState {
   resetAll: () => void;
 }
 
-const tableOf = { log: 'logs', checkin: 'checkins', meal: 'meals', body: 'bodyComps' } as const;
+const tableOf = { log: 'logs', checkin: 'checkins', meal: 'meals', body: 'bodyComps', run: 'runs' } as const;
 
 const empty = {
-  logs: {}, checkins: {}, meals: {}, bodyComps: {},
+  logs: {}, checkins: {}, meals: {}, bodyComps: {}, runs: {},
   settings: DEFAULT_SETTINGS, dirty: [] as string[], pulledAt: null as string | null,
 };
 
@@ -87,6 +90,15 @@ export const useData = create<DataState>()(
         if (!cur) return;
         set((s) => ({ bodyComps: { ...s.bodyComps, [id]: { ...cur, deleted: true, updatedAt: Date.now() } }, dirty: addDirty(s.dirty, `body:${id}`) }));
       },
+      addRun: (r) => {
+        const rec: Run = { ...r, id: newId(), updatedAt: Date.now() };
+        set((s) => ({ runs: { ...s.runs, [rec.id]: rec }, dirty: addDirty(s.dirty, `run:${rec.id}`) }));
+      },
+      removeRun: (id) => {
+        const cur = get().runs[id];
+        if (!cur) return;
+        set((s) => ({ runs: { ...s.runs, [id]: { ...cur, deleted: true, updatedAt: Date.now() } }, dirty: addDirty(s.dirty, `run:${id}`) }));
+      },
       updateSettings: (patch) => {
         set((s) => ({ settings: { ...s.settings, ...patch, updatedAt: Date.now() }, dirty: addDirty(s.dirty, 'settings:main') }));
       },
@@ -94,7 +106,7 @@ export const useData = create<DataState>()(
       mergeRemote: (rows, cursor) => {
         set((s) => {
           const next: Partial<DataState> = {
-            logs: { ...s.logs }, checkins: { ...s.checkins }, meals: { ...s.meals }, bodyComps: { ...s.bodyComps },
+            logs: { ...s.logs }, checkins: { ...s.checkins }, meals: { ...s.meals }, bodyComps: { ...s.bodyComps }, runs: { ...s.runs },
           };
           let settings = s.settings;
           for (const r of rows) {
@@ -127,6 +139,7 @@ export const useData = create<DataState>()(
           ...Object.keys(s.checkins).map((id) => `checkin:${id}`),
           ...Object.keys(s.meals).map((id) => `meal:${id}`),
           ...Object.keys(s.bodyComps).map((id) => `body:${id}`),
+          ...Object.keys(s.runs).map((id) => `run:${id}`),
           ...(s.settings.updatedAt ? ['settings:main'] : []),
         ];
         set({ dirty: keys });

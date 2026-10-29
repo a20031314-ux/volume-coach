@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { useToast } from '@/components/toast';
-import { Button, Card, ConfirmButton, DayNav, Field, NumField, Pills, Row, Screen, Stepper, T } from '@/components/ui';
+import { Button, Card, ConfirmButton, DayNav, Field, NumField, Pills, Row, Screen, Segmented, Stepper, T } from '@/components/ui';
+import { WeekView } from '@/components/week-view';
 import { Space, usePalette } from '@/constants/theme';
 import { addDays, fmt, today } from '@/lib/dates';
 import { MUSCLES, MUSCLE_NAME, library } from '@/lib/exercises';
@@ -21,6 +22,7 @@ export default function Log() {
   const removeLog = useData((s) => s.removeLog);
   const updateSettings = useData((s) => s.updateSettings);
 
+  const [view, setView] = useState<'log' | 'week'>('log');
   const [date, setDate] = useState(today());
   const [muscle, setMuscle] = useState<MuscleKey>('chest');
   const [exercise, setExercise] = useState<string | null>(null);
@@ -35,7 +37,7 @@ export default function Log() {
   if (params.muscle !== prevParam) {
     setPrevParam(params.muscle);
     const m = params.muscle as MuscleKey | undefined;
-    if (m && MUSCLE_NAME[m]) { setMuscle(m); setExercise(null); setDate(today()); }
+    if (m && MUSCLE_NAME[m]) { setMuscle(m); setExercise(null); setDate(today()); setView('log'); }
   }
 
   const options = library(settings.customExercises).filter((e) => e.m === muscle);
@@ -63,6 +65,8 @@ export default function Log() {
 
   return (
     <Screen title="기록">
+      <Segmented options={[{ v: 'log', n: '운동 기록' }, { v: 'week', n: '주간 볼륨' }]} value={view} onChange={(v) => v && setView(v)} />
+      {view === 'week' ? <WeekView /> : (<>
       <Card>
         <DayNav date={date} label={date === today() ? `오늘 · ${fmt(date)}` : fmt(date)}
           onPrev={() => setDate(addDays(date, -1))} onNext={() => setDate(addDays(date, 1))} />
@@ -110,6 +114,7 @@ export default function Log() {
           ))}
         </View>
       ))}
+      </>)}
     </Screen>
   );
 }

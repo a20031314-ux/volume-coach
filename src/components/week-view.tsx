@@ -1,12 +1,12 @@
 import { View } from 'react-native';
 
-import { Chip, Row, Screen, T, fmtN } from '@/components/ui';
+import { Chip, Row, T, fmtN } from './ui';
 import { Space, usePalette } from '@/constants/theme';
 import { useCoach } from '@/hooks/use-coach';
 import { useNow } from '@/hooks/use-now';
-import { fmt } from '@/lib/dates';
 
-export default function Week() {
+/** Weekly sets per muscle against the target range. */
+export function WeekView() {
   const c = usePalette();
   const now = useNow();
   const { input, result } = useCoach(now);
@@ -14,7 +14,7 @@ export default function Week() {
   const pct = (v: number) => Math.min(100, (v / top) * 100);
 
   return (
-    <Screen title="주간" sub={`${fmt(result.W)} – ${fmt(result.E)}`}>
+    <>
       <T v="muted">막대 = 이번 주 세트, 옅은 띠 = 목표 범위 {result.min}~{result.max}세트.</T>
       <View>
         {result.stats.map((s) => (
@@ -40,6 +40,6 @@ export default function Week() {
       <Row>
         <T v="small">보조 부위는 {input.settings.sec ? `${input.settings.sec}세트로` : '계산하지 않고'} 집계해요. 예: 벤치프레스 4세트 = 가슴 4 + 삼두·어깨 각 {4 * input.settings.sec}.</T>
       </Row>
-    </Screen>
+    </>
   );
 }
