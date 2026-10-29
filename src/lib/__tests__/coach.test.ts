@@ -54,6 +54,18 @@ describe('coach', () => {
     expect(c.stats.find((s) => s.k === 'chest')!.recPre).toBe(100);
   });
 
+  it('ignores check-in items that are turned off', () => {
+    const ci = { [T]: { id: T, updatedAt: 0, date: T, sleep: 0 as const, energy: 0 as const, sore: ['chest' as const] } };
+    const on = compute(input([], { checkins: ci }));
+    const off = compute(input([], { checkins: ci, settings: { ...DEFAULT_SETTINGS, checkin: { sleep: false, energy: false, sore: false, systemic: false } } }));
+    expect(on.readiness.cap).toBeLessThan(off.readiness.cap);
+    expect(off.readiness.cap).toBe(DEFAULT_SETTINGS.cap);
+    expect(on.stats.find((x) => x.k === 'chest')!.sore).toBe(true);
+    expect(off.stats.find((x) => x.k === 'chest')!.sore).toBe(false);
+    const sleepOnly = compute(input([], { checkins: ci, settings: { ...DEFAULT_SETTINGS, checkin: { sleep: true, energy: false, sore: false, systemic: false } } }));
+    expect(sleepOnly.readiness.why).toEqual(['수면 부족']);
+  });
+
   it('counts deleted logs as gone', () => {
     const l = log(0, '바벨 벤치프레스', 'chest', 4);
     const c = compute(input([{ ...l, deleted: true }]));

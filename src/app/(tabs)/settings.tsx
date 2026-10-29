@@ -159,6 +159,18 @@ export default function SettingsScreen() {
         ))}
       </Card>
 
+      <T v="label">컨디션 반영</T>
+      <Card>
+        <Pills
+          options={[{ k: 'sleep', n: '수면' }, { k: 'energy', n: '컨디션' }, { k: 'sore', n: '근육통' }, { k: 'systemic', n: '최근 전신 피로' }] as { k: keyof typeof s.checkin; n: string }[]}
+          value={(['sleep', 'energy', 'sore', 'systemic'] as const).filter((k) => s.checkin[k])}
+          onToggle={(k) => update({ checkin: { ...s.checkin, [k]: !s.checkin[k] } })} />
+        <T v="small">
+          켠 항목만 오늘 추천에 반영해요. 수면·컨디션이 나쁘면 볼륨을 줄이고, 근육통 부위는 회복도를 낮게 보고, 최근 며칠 볼륨이 많았으면 전체 세트를 줄여요.
+          수면·컨디션·근육통을 모두 끄면 오늘 탭에서 컨디션 체크가 사라져요.
+        </T>
+      </Card>
+
       <T v="label">운동 진행 방식</T>
       <Card>
         <View style={{ gap: 6 }}><T v="muted">기본 기록 단위</T>

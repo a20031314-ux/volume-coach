@@ -25,6 +25,8 @@ export default function Today() {
   const logs = useData((s) => s.logs);
   const checkin = useData((s) => s.checkins[result.T]);
   const setCheckin = useData((s) => s.setCheckin);
+  const updateSettings = useData((s) => s.updateSettings);
+  const ck = settings.checkin;
   const [swaps, setSwaps] = useState<Record<string, number>>({});
   const [draft, setDraft] = useState<LogDraft | null>(null);
   const running = useData(selectActiveSession);
@@ -42,27 +44,44 @@ export default function Today() {
     <Screen title="오늘" sub={`${fmt(result.W)} – ${fmt(result.E)} · 남은 ${result.daysLeft}일${settings.deload ? ' · 디로드' : ''}`}>
       {hint ? <Banner text={hint} /> : null}
 
-      <Card>
-        <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
-          <T v="muted" style={{ width: 52 }}>수면</T>
-          <Segmented options={[{ v: 0, n: '부족' }, { v: 1, n: '보통' }, { v: 2, n: '충분' }]} value={checkin?.sleep ?? null}
-            onChange={(v) => setCheckin(result.T, { sleep: v as 0 | 1 | 2 | null })} />
-        </Row>
-        <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
-          <T v="muted" style={{ width: 52 }}>컨디션</T>
-          <Segmented options={[{ v: 0, n: '처짐' }, { v: 1, n: '보통' }, { v: 2, n: '좋음' }]} value={checkin?.energy ?? null}
-            onChange={(v) => setCheckin(result.T, { energy: v as 0 | 1 | 2 | null })} />
-        </Row>
-        <View style={{ gap: 6 }}>
-          <T v="muted">근육통 있는 부위</T>
-          <Pills danger options={activeMuscles} value={sore}
-            onToggle={(k) => setCheckin(result.T, { sore: sore.includes(k) ? sore.filter((x) => x !== k) : [...sore, k] })} />
-        </View>
-        <View style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: c.line, paddingTop: Space.md, gap: 2 }}>
-          <Row style={{ alignItems: 'baseline' }}><T v="muted">오늘 권장 볼륨</T><T v="num">{rd.cap}</T><T v="muted">세트</T></Row>
-          <T v="small">{rd.why.length ? `${rd.why.join(' · ')} 반영` : rd.hasCheckin ? '평소대로 진행' : '수면·컨디션을 고르면 볼륨을 조정해요'}</T>
-        </View>
-      </Card>
+      {ck.sleep || ck.energy || ck.sore ? (
+        <Card>
+          <Row style={{ justifyContent: 'space-between' }}>
+            <T v="title" style={{ fontSize: 15 }}>오늘 컨디션</T>
+            <Button label="숨기기" kind="ghost" onPress={() => {
+              updateSettings({ checkin: { ...ck, sleep: false, energy: false, sore: false } });
+              toast('컨디션 체크를 숨겼어요. 설정에서 다시 켤 수 있어요');
+            }} />
+          </Row>
+          {ck.sleep ? (
+            <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
+              <T v="muted" style={{ width: 52 }}>수면</T>
+              <Segmented options={[{ v: 0, n: '부족' }, { v: 1, n: '보통' }, { v: 2, n: '충분' }]} value={checkin?.sleep ?? null}
+                onChange={(v) => setCheckin(result.T, { sleep: v as 0 | 1 | 2 | null })} />
+            </Row>
+          ) : null}
+          {ck.energy ? (
+            <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
+              <T v="muted" style={{ width: 52 }}>컨디션</T>
+              <Segmented options={[{ v: 0, n: '처짐' }, { v: 1, n: '보통' }, { v: 2, n: '좋음' }]} value={checkin?.energy ?? null}
+                onChange={(v) => setCheckin(result.T, { energy: v as 0 | 1 | 2 | null })} />
+            </Row>
+          ) : null}
+          {ck.sore ? (
+            <View style={{ gap: 6 }}>
+              <T v="muted">근육통 있는 부위</T>
+              <Pills danger options={activeMuscles} value={sore}
+                onToggle={(k) => setCheckin(result.T, { sore: sore.includes(k) ? sore.filter((x) => x !== k) : [...sore, k] })} />
+            </View>
+          ) : null}
+          <View style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: c.line, paddingTop: Space.md, gap: 2 }}>
+            <Row style={{ alignItems: 'baseline' }}><T v="muted">오늘 권장 볼륨</T><T v="num">{rd.cap}</T><T v="muted">세트</T></Row>
+            <T v="small">{rd.why.length ? `${rd.why.join(' · ')} 반영` : rd.hasCheckin ? '평소대로 진행' : ck.sleep || ck.energy ? '수면·컨디션을 고르면 볼륨을 조정해요' : '근육통 부위는 회복도를 낮춰 계산해요'}</T>
+          </View>
+        </Card>
+      ) : rd.why.length ? (
+        <T v="small">오늘 권장 볼륨 {rd.cap}세트 · {rd.why.join(' · ')} 반영</T>
+      ) : null}
 
       <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
         <T v="small" style={{ flexShrink: 1 }}>운동 방식 · {routineMode ? `루틴형 (${routine!.name})` : '자율형 (규칙 기반 추천)'}</T>

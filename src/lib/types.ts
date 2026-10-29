@@ -139,6 +139,14 @@ export interface SessionOptions {
   autoEndMin: number;
 }
 
+export interface CheckinOptions {
+  sleep: boolean;
+  energy: boolean;
+  sore: boolean;
+  /** lower today's volume after several heavy days */
+  systemic: boolean;
+}
+
 export interface Food { n: string; k: number; p: number; c: number; f: number }
 export interface CustomExercise { n: string; m: MuscleKey }
 
@@ -187,6 +195,8 @@ export interface Settings {
   profile: Profile;
   session: SessionOptions;
   run: RunOptions;
+  /** which readiness signals adjust the plan; all off hides the check-in card */
+  checkin: CheckinOptions;
   /** 자율형: rules + daily recommendation · 루틴형: follow a routine */
   planMode: 'auto' | 'routine';
   activeRoutineId: string | null;
@@ -198,6 +208,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ready: 70, deload: false, off: [], customExercises: [], foods: [],
   profile: { goal: 'hyp', act: '1' },
   session: { detail: 'exercise', setInputs: true, setRpe: false, restTimer: true, autoEndMin: 90 },
+  checkin: { sleep: true, energy: true, sore: true, systemic: true },
   planMode: 'auto',
   activeRoutineId: null,
   run: {

@@ -107,18 +107,22 @@ export function readiness(input: CoachInput, T: string): Readiness {
     if (h < 0 || h > 336) continue;
     S += (r.distanceM / 1000) * RUN_SYSTEMIC_PER_KM * Math.pow(0.5, h / 48);
   }
-  const ratio = S / Math.max(1, s.cap);
+  const opt = s.checkin ?? { sleep: true, energy: true, sore: true, systemic: true };
+  const ratio = opt.systemic ? S / Math.max(1, s.cap) : 0;
+  const sleep = opt.sleep ? ci?.sleep : null;
+  const energy = opt.energy ? ci?.energy : null;
   let f = 1;
   const why: string[] = [];
-  if (ci?.sleep === 0) { f -= 0.15; why.push('수면 부족'); }
-  if (ci?.energy === 0) { f -= 0.15; why.push('컨디션 처짐'); }
-  if (ci?.sleep === 2 && ci?.energy === 2) f += 0.05;
+  if (sleep === 0) { f -= 0.15; why.push('수면 부족'); }
+  if (energy === 0) { f -= 0.15; why.push('컨디션 처짐'); }
+  // a bonus only when every enabled signal is at its best
+  if ((sleep === 2 || !opt.sleep) && (energy === 2 || !opt.energy) && (opt.sleep || opt.energy)) f += 0.05;
   if (ratio > 1.3) { f -= 0.15; why.push('최근 전신 피로 높음'); }
   else if (ratio > 1) { f -= 0.05; why.push('전신 피로 약간 높음'); }
   f = Math.max(0.5, Math.min(1.05, f));
   return {
     factor: f, why, ratio, cap: Math.round(s.cap * f),
-    hasCheckin: ci?.sleep != null || ci?.energy != null, sore: ci?.sore ?? [],
+    hasCheckin: sleep != null || energy != null, sore: opt.sore ? ci?.sore ?? [] : [],
   };
 }
 
@@ -267,7 +271,8 @@ export function deloadHint(c: CoachResult, input: CoachInput): string | null {
   }
   const recent = Object.values(input.checkins).filter((x) => !x.deleted && x.date <= c.T)
     .sort((a, b) => (a.date < b.date ? -1 : 1)).slice(-4);
-  const low = recent.filter((x) => x.sleep === 0 || x.energy === 0).length;
+  const ck = s.checkin ?? { sleep: true, energy: true };
+  const low = recent.filter((x) => (ck.sleep && x.sleep === 0) || (ck.energy && x.energy === 0)).length;
   if (streak >= 4) return '4주 연속 목표 볼륨을 채웠어요. 이번 주는 설정에서 디로드를 켜는 걸 고려해 보세요.';
   if (recent.length >= 3 && low >= 3) return '최근 컨디션 체크가 계속 낮아요. 설정에서 디로드를 켜면 범위가 절반으로 줄어요.';
   return null;
