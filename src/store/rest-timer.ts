@@ -15,7 +15,8 @@ export const useRest = create<RestState>()(
 );
 
 let ready = false;
-async function ensureReady(): Promise<boolean> {
+/** Set up local notifications once and ask permission. Returns false when they can't be shown. */
+export async function ensureNotifications(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
   if (!ready) {
     Notifications.setNotificationHandler({
@@ -25,7 +26,7 @@ async function ensureReady(): Promise<boolean> {
       await Notifications.setNotificationChannelAsync('rest', {
         // AndroidImportance is re-exported through a types module the import plugin can't follow
         // eslint-disable-next-line import/namespace
-        name: '휴식 타이머', importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 300, 150, 300],
+        name: '운동 알림', importance: Notifications.AndroidImportance.HIGH, vibrationPattern: [0, 300, 150, 300],
       });
     }
     ready = true;
@@ -47,7 +48,7 @@ export async function startRest(seconds: number, label: string) {
   await cancelPending();
   useRest.setState({ until: Date.now() + seconds * 1000, total: seconds, notifId: null, label });
   try {
-    if (!(await ensureReady())) return;
+    if (!(await ensureNotifications())) return;
     const notifId = await Notifications.scheduleNotificationAsync({
       content: { title: '휴식 끝', body: `${label} 다음 세트를 시작하세요`, sound: true },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: Math.max(1, Math.round(seconds)), channelId: 'rest' },

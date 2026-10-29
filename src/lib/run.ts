@@ -6,6 +6,7 @@ export interface GpsPoint {
   t: number;          // epoch ms
   acc?: number | null; // horizontal accuracy, m
   seg: number;        // segment index; a new segment starts after each pause
+  ms?: number;        // moving seconds since the start (pauses excluded)
 }
 
 export interface Split { km: number; seconds: number }

@@ -62,6 +62,26 @@ export interface Run extends SyncMeta {
   splits: { km: number; seconds: number }[];
   /** simplified route as [lat, lng, segment] */
   route: [number, number, number][];
+  /** speed over time as [moving second, m/s] */
+  timeline?: [number, number][];
+  intervalPlan?: IntervalPlanData | null;
+  phases?: { kind: 'warmup' | 'work' | 'rest' | 'cooldown'; rep: number; durS: number; distanceM: number; paceS: number | null }[];
+}
+
+export interface IntervalPlanData {
+  warmupS: number; workS: number; restS: number; repeats: number; cooldownS: number; targetPaceS?: number | null;
+}
+
+export interface RunOptions {
+  /** spoken guidance */
+  voice: boolean;
+  /** announce every km */
+  kmAlert: boolean;
+  /** announce every N minutes (0 = off) */
+  everyMin: number;
+  mode: 'free' | 'interval';
+  /** last used interval plan */
+  interval: IntervalPlanData;
 }
 
 export type SessionDetail = 'exercise' | 'set';
@@ -138,6 +158,7 @@ export interface Settings {
   foods: Food[];
   profile: Profile;
   session: SessionOptions;
+  run: RunOptions;
   updatedAt: number;
 }
 
@@ -146,5 +167,9 @@ export const DEFAULT_SETTINGS: Settings = {
   ready: 70, deload: false, off: [], customExercises: [], foods: [],
   profile: { goal: 'hyp', act: '1' },
   session: { detail: 'exercise', setInputs: true, setRpe: false, restTimer: true, autoEndMin: 90 },
+  run: {
+    voice: true, kmAlert: true, everyMin: 0, mode: 'free',
+    interval: { warmupS: 300, workS: 240, restS: 180, repeats: 5, cooldownS: 300, targetPaceS: null },
+  },
   updatedAt: 0,
 };

@@ -202,8 +202,8 @@ export function NumField({ label, value, onCommit, decimal, placeholder, style }
   );
 }
 
-export function Stepper({ value, onChange, step = 1, min = 1, max = 30, label }: {
-  value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number; label: string;
+export function Stepper({ value, onChange, step = 1, min = 1, max = 30, label, format }: {
+  value: number; onChange: (v: number) => void; step?: number; min?: number; max?: number; label: string; format?: (v: number) => string;
 }) {
   const c = usePalette();
   const fix = (v: number) => Math.round(v * 10) / 10;
@@ -212,7 +212,7 @@ export function Stepper({ value, onChange, step = 1, min = 1, max = 30, label }:
       <Text style={{ fontSize: 13, color: c.muted, fontWeight: '500' }}>{label}</Text>
       <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
         <Button label="−" accessibilityLabel={`${label} 줄이기`} onPress={() => onChange(fix(Math.max(min, value - step)))} style={{ width: 44 }} />
-        <Text style={{ flex: 1, textAlign: 'center', fontSize: 22, fontWeight: '700', color: c.ink, fontVariant: ['tabular-nums'] }}>{value}</Text>
+        <Text style={{ flex: 1, textAlign: 'center', fontSize: 22, fontWeight: '700', color: c.ink, fontVariant: ['tabular-nums'] }}>{format ? format(value) : value}</Text>
         <Button label="+" accessibilityLabel={`${label} 늘리기`} onPress={() => onChange(fix(Math.min(max, value + step)))} style={{ width: 44 }} />
       </View>
     </View>
