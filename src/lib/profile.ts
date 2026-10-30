@@ -46,24 +46,35 @@ export interface Body {
   weight: number; height: number; bmi: number;
   /** fat-free mass, kg; null when no body-composition data */
   ffm: number | null;
-  ffmSource: 'fat' | 'smm' | null;
+  ffmSource: 'measured' | 'fat' | 'smm' | null;
   fatPct: number | null;
   smm: number | null;
+  /** measured BMR from InBody, kcal */
+  bmr: number | null;
+  source: 'inbody' | 'manual';
+}
+
+/** Which body numbers to use: InBody records or hand-entered ones. */
+export function bodySource(p: Profile, comps: BodyComp[] = []): 'inbody' | 'manual' {
+  if (p.bodySource) return p.bodySource;
+  return latestBodyComp(comps) ? 'inbody' : 'manual';
 }
 
 export function body(p: Profile, comps: BodyComp[] = []): Body | null {
-  const latest = latestBodyComp(comps);
-  const weight = latest?.weight || Number(p.weight) || 0;
+  const src = bodySource(p, comps);
+  const latest = src === 'inbody' ? latestBodyComp(comps) : undefined;
+  const weight = (src === 'inbody' ? latest?.weight : null) || Number(p.weight) || 0;
   const height = Number(p.height) || 0;
   if (!weight || !height) return null;
   const bmi = weight / Math.pow(height / 100, 2);
-  const fatPct = latest?.fatPct ?? null;
+  const fatPct = src === 'inbody' ? latest?.fatPct ?? null : p.fatPct ?? null;
   const smm = latest?.smm ?? null;
   let ffm: number | null = null;
   let ffmSource: Body['ffmSource'] = null;
-  if (fatPct != null && fatPct > 0 && fatPct < 70) { ffm = weight * (1 - fatPct / 100); ffmSource = 'fat'; }
+  if (latest?.ffm && latest.ffm > 0 && latest.ffm < weight) { ffm = latest.ffm; ffmSource = 'measured'; }
+  else if (fatPct != null && fatPct > 0 && fatPct < 70) { ffm = weight * (1 - fatPct / 100); ffmSource = 'fat'; }
   else if (smm) { ffm = Math.min(weight, smm / SMM_TO_FFM); ffmSource = 'smm'; }
-  return { weight, height, bmi, ffm, ffmSource, fatPct, smm };
+  return { weight, height, bmi, ffm, ffmSource, fatPct, smm, bmr: latest?.bmr ?? null, source: src };
 }
 
 export interface ProteinTarget { lo: number; hi: number; mid: number; basis: string }

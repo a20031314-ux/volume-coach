@@ -25,8 +25,6 @@ export default function ProfilePrefs() {
       <Card>
         <Row gap={Space.md}>
           <NumField label="나이" value={p.age} onCommit={(age) => setP({ age })} />
-          <NumField label="키 cm" value={p.height} onCommit={(height) => setP({ height })} decimal />
-          <NumField label="체중 kg" value={p.weight} onCommit={(weight) => setP({ weight })} decimal />
         </Row>
         <View style={{ gap: 6 }}><T v="muted">성별</T>
           <Segmented options={[{ v: 'm', n: '남성' }, { v: 'f', n: '여성' }]} value={p.sex || null} onChange={(v) => setP({ sex: (v ?? '') as Profile['sex'] })} />

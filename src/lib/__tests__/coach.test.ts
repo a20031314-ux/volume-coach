@@ -93,6 +93,23 @@ describe('profile & nutrition', () => {
     expect(pt.hi).toBe(187);
   });
 
+  it('uses hand-entered numbers when the source is manual', () => {
+    const b = body({ goal: 'hyp', height: 178, weight: 80, fatPct: 15, bodySource: 'manual' }, [comp])!;
+    expect(b.source).toBe('manual');
+    expect(b.weight).toBe(80);
+    expect(b.ffm).toBeCloseTo(68, 0);
+    expect(body({ goal: 'hyp', height: 178, weight: 80, bodySource: 'manual' }, [comp])!.ffm).toBeNull();
+  });
+
+  it('uses measured fat-free mass and BMR from InBody', () => {
+    const b = body({ goal: 'hyp', height: 178 }, [{ ...comp, ffm: 72, bmr: 1920 }])!;
+    expect(b.ffmSource).toBe('measured');
+    expect(b.ffm).toBe(72);
+    const t = nutritionTargets({ goal: 'hyp', age: 32, sex: 'm', height: 178, act: '1' }, [{ ...comp, ffm: 72, bmr: 1920 }], [], T)!;
+    expect(t.bmrFormula).toBe('measured');
+    expect(t.bmr).toBe(1920);
+  });
+
   it('prefers body fat % over skeletal muscle', () => {
     const b = body({ goal: 'hyp', height: 178 }, [{ ...comp, fatPct: 20 }])!;
     expect(b.ffmSource).toBe('fat');

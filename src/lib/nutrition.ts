@@ -14,7 +14,7 @@ export const FOODS: Food[] = ([
 
 export interface NutritionTargets {
   kcal: number; p: number; c: number; f: number;
-  tdee: number; bmr: number; bmrFormula: 'mifflin' | 'katch';
+  tdee: number; bmr: number; bmrFormula: 'measured' | 'mifflin' | 'katch';
   trainingDay: boolean; proteinBasis: string; adjustLabel: string; body: Body;
 }
 
@@ -26,7 +26,8 @@ export function nutritionTargets(p: Profile, comps: BodyComp[], logs: WorkoutLog
   if (!b || !age) return null;
   let bmr: number;
   let bmrFormula: NutritionTargets['bmrFormula'];
-  if (b.ffm) { bmr = 370 + 21.6 * b.ffm; bmrFormula = 'katch'; }
+  if (b.bmr && b.bmr > 800) { bmr = b.bmr; bmrFormula = 'measured'; }
+  else if (b.ffm) { bmr = 370 + 21.6 * b.ffm; bmrFormula = 'katch'; }
   else {
     const sexAdj = p.sex === 'm' ? 5 : p.sex === 'f' ? -161 : -78;
     bmr = 10 * b.weight + 6.25 * b.height - 5 * age + sexAdj;

@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 
 import { Group, ListRow } from '@/components/layout';
 import { Screen, T } from '@/components/ui';
-import { latestBodyComp } from '@/lib/profile';
+import { bodySource, latestBodyComp } from '@/lib/profile';
 import type { Goal } from '@/lib/types';
 import { useAuth } from '@/store/auth';
 import { live, useData } from '@/store/store';
@@ -15,8 +15,14 @@ export default function SettingsScreen() {
   const s = useData((x) => x.settings);
   const bodyT = useData((x) => x.bodyComps);
   const routine = useData((x) => (x.settings.activeRoutineId ? x.routines[x.settings.activeRoutineId] : undefined));
-  const latest = useMemo(() => latestBodyComp(live(bodyT)), [bodyT]);
   const p = s.profile;
+  const bodyValue = useMemo(() => {
+    const comps = live(bodyT);
+    const src = bodySource(p, comps);
+    const latest = latestBodyComp(comps);
+    if (src === 'inbody') return latest ? `인바디 · ${latest.weight}kg` : '인바디 · 기록 없음';
+    return p.weight ? `직접 입력 · ${p.weight}kg` : '직접 입력';
+  }, [bodyT, p]);
   const marks = Object.keys(s.exercisePrefs).length;
 
   return (
@@ -31,7 +37,7 @@ export default function SettingsScreen() {
 
       <Group title="나">
         <ListRow label="내 정보" value={[p.age ? `${p.age}세` : null, GOAL[p.goal]].filter(Boolean).join(' · ')} onPress={() => router.push('/prefs/profile')} />
-        <ListRow label="인바디" value={latest ? `${latest.weight}kg${latest.smm ? ` · 골격근 ${latest.smm}` : ''}` : '기록 없음'} onPress={() => router.push('/prefs/body')} last />
+        <ListRow label="신체 정보" value={bodyValue} onPress={() => router.push('/prefs/body')} last />
       </Group>
 
       <Group title="계정">

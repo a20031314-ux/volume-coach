@@ -48,6 +48,12 @@ export interface BodyComp extends SyncMeta {
   weight: number;            // kg
   smm?: number | null;       // skeletal muscle mass, kg
   fatPct?: number | null;    // body fat %
+  /** fat-free mass as measured, kg (InBody 제지방량) */
+  ffm?: number | null;
+  /** basal metabolic rate as measured, kcal (InBody 기초대사량) */
+  bmr?: number | null;
+  /** visceral fat level */
+  visceral?: number | null;
 }
 
 /** A finished GPS run. */
@@ -172,6 +178,10 @@ export interface Profile {
   sex?: Sex;
   height?: number | null;
   weight?: number | null;
+  /** body fat % entered by hand (직접 입력) */
+  fatPct?: number | null;
+  /** where body numbers come from. Unset = InBody records if there are any, else manual. */
+  bodySource?: 'inbody' | 'manual';
   years?: '' | '0' | '1' | '3';
   act?: '0' | '1' | '2';
   goal: Goal;
