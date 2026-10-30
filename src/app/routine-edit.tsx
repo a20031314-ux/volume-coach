@@ -125,7 +125,6 @@ export default function RoutineEditor() {
         <Card>
           <T v="title">주간 볼륨 점검</T>
           <VolumeCheckView checks={vol} min={settings.min} max={settings.max} />
-          <T v="small">범위는 설정 탭의 운동 규칙을 따라요. 벗어나도 저장할 수 있어요.</T>
         </Card>
       </ScrollView>
 

@@ -11,13 +11,9 @@ export function VolumeCheckView({ checks, min, max }: { checks: VolumeCheck[]; m
   const shown = checks.filter((x) => x.status !== 'off');
   const top = Math.max(max + 4, ...shown.map((x) => x.sets + 1));
   const pct = (v: number) => `${Math.min(100, (v / top) * 100)}%` as const;
-  const issues = shown.filter((x) => x.status !== 'ok');
   return (
     <View style={{ gap: 6 }}>
-      <T v="small">
-        주간 세트(보조 부위 포함) · 목표 {min}~{max}
-        {issues.length ? ` · ${issues.map((x) => `${x.name} ${x.status === 'low' ? '부족' : '많음'}`).join(', ')}` : ' · 모든 부위가 범위 안이에요'}
-      </T>
+      <T v="small">주간 세트 · 목표 {min}~{max}</T>
       {shown.map((x) => {
         const color = x.status === 'ok' ? c.ok : x.status === 'low' ? c.accent : c.warn;
         return (

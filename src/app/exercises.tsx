@@ -34,7 +34,6 @@ export default function ExerciseList() {
   return (
     <ScrollView style={{ flex: 1, backgroundColor: c.bg }}
       contentContainerStyle={{ padding: Space.lg, paddingBottom: insets.bottom + Space.xl, gap: Space.md, maxWidth: 680, width: '100%', alignSelf: 'center' }}>
-      <T v="muted">★ 즐겨찾기는 먼저 추천하고, &apos;안 함&apos;은 추천에서 빼고, &apos;못 함&apos;은 운동 추가 목록에서도 숨겨요. 운동 이름을 길게 눌러도 바로 표시할 수 있어요.</T>
       <Pills options={MUSCLES} value={m} onToggle={setM} />
       {list.map((e) => {
         const v = verdict(e, ctx);

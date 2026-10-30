@@ -1,156 +1,139 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 
+import { Disclosure, Group, ListRow, Page } from '@/components/layout';
 import { useToast } from '@/components/toast';
 import { Button, Card, Chip, ConfirmButton, Pills, Row, Segmented, Stepper, T } from '@/components/ui';
 import { VolumeCheckView } from '@/components/volume-check';
 import { Space, usePalette } from '@/constants/theme';
-import { DOW } from '@/lib/dates';
-import { MUSCLES } from '@/lib/exercises';
 import { knownExercises } from '@/lib/ability';
-import { defaultWeekdays, recommendRoutine, weeklyVolume } from '@/lib/routine';
+import { MUSCLES } from '@/lib/exercises';
+import { recommendRoutine, weeklyVolume } from '@/lib/routine';
 import type { Profile, Routine } from '@/lib/types';
 import { live, newId, useData } from '@/store/store';
 
-const SOURCE = { recommended: '추천', edited: '추천+수정', custom: '직접 짠 루틴' } as const;
+const SOURCE = { recommended: '추천', edited: '추천 수정', custom: '직접' } as const;
 
 export default function RoutineHub() {
   const c = usePalette();
-  const insets = useSafeAreaInsets();
   const toast = useToast();
   const s = useData((x) => x.settings);
   const update = useData((x) => x.updateSettings);
   const routinesT = useData((x) => x.routines);
   const putRoutine = useData((x) => x.putRoutine);
   const removeRoutine = useData((x) => x.removeRoutine);
-  const [schedule, setSchedule] = useState<Routine['schedule']>(() => (s.activeRoutineId && routinesT[s.activeRoutineId]?.schedule) || 'rotation');
+  const logsT = useData((x) => x.logs);
   const [peek, setPeek] = useState(false);
 
   const p = s.profile;
   const setP = (patch: Partial<Profile>) => update({ profile: { ...p, ...patch } });
-  const logsT = useData((x) => x.logs);
   const known = useMemo(() => knownExercises(live(logsT)), [logsT]);
-  const rec = useMemo(() => recommendRoutine({ profile: p, settings: s, schedule, known }), [p, s, schedule, known]);
+  const rec = useMemo(() => recommendRoutine({ profile: p, settings: s, known }), [p, s, known]);
   const recVol = useMemo(() => weeklyVolume(rec, s, p.days), [rec, s, p.days]);
-  const routines = useMemo(() => live(routinesT).sort((a, b) => b.updatedAt - a.updatedAt), [routinesT]);
+  const routines = useMemo(
+    () => live(routinesT).sort((a, b) => Number(b.id === s.activeRoutineId) - Number(a.id === s.activeRoutineId) || b.updatedAt - a.updatedAt),
+    [routinesT, s.activeRoutineId],
+  );
+  const low = recVol.filter((v) => v.status === 'low');
 
-  const save = (r: Omit<Routine, 'id' | 'updatedAt'>, activate = true) => {
+  const save = (r: Omit<Routine, 'id' | 'updatedAt'>) => {
     const id = newId();
     putRoutine({ ...r, id });
-    if (activate) update({ planMode: 'routine', activeRoutineId: id });
+    update({ planMode: 'routine', activeRoutineId: id });
     return id;
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: c.bg }} keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ padding: Space.lg, paddingBottom: insets.bottom + Space.xl, gap: Space.md, maxWidth: 680, width: '100%', alignSelf: 'center' }}>
-      <T v="label" style={{ marginTop: 0 }}>운동 방식</T>
-      <Card>
-        <Segmented options={[{ v: 'auto', n: '자율형' }, { v: 'routine', n: '루틴형' }]} value={s.planMode}
-          onChange={(v) => v && update({ planMode: v })} />
-        <T v="small">
-          {s.planMode === 'auto'
-            ? '규칙(부위당 주간 세트 범위, 운동 종류, 휴식일)만 정해두면 그날 회복도와 컨디션에 맞춰 매일 운동을 짜줘요.'
-            : '정해둔 루틴을 따라가요. 회복이 덜 된 날에는 다른 날 루틴을 먼저 하자고 제안해요.'}
-        </T>
-        {s.planMode === 'auto' ? <Button label="규칙 바꾸기" onPress={() => router.navigate('/settings')} style={{ alignSelf: 'flex-start' }} /> : null}
-      </Card>
+    <Page>
+      <Segmented options={[{ v: 'auto', n: '자율형' }, { v: 'routine', n: '루틴형' }]} value={s.planMode}
+        onChange={(v) => v && update({ planMode: v })} />
 
-      {s.planMode === 'routine' ? (
+      {s.planMode === 'auto' ? (
+        <Group>
+          <ListRow label="운동 규칙" value={`주 ${s.min}~${s.max}세트`} onPress={() => router.push('/prefs/rules')} last />
+        </Group>
+      ) : (
         <>
-          <T v="label">일정 방식</T>
-          <Card>
-            <Segmented options={[{ v: 'rotation', n: '순서대로 반복' }, { v: 'weekday', n: '요일 고정' }]} value={schedule}
-              onChange={(v) => {
-                if (!v) return;
-                setSchedule(v);
-                const act = s.activeRoutineId ? routinesT[s.activeRoutineId] : null;
-                if (act && act.schedule !== v) {
-                  const wd = defaultWeekdays(act.days.length);
-                  putRoutine({ ...act, schedule: v, days: act.days.map((d, i) => ({ ...d, weekdays: d.weekdays.length ? d.weekdays : wd[i] })) });
-                }
-              }} />
-            <T v="small">{schedule === 'rotation' ? 'Day 1 → 2 → 3 … 순서로 이어가요. 하루 쉬면 다음 날 이어서 해요.' : '정해둔 요일에 정해둔 루틴을 해요. 그 외 요일은 쉬는 날이에요.'}</T>
-          </Card>
-
-          <T v="label">추천 루틴</T>
-          <Card>
-            {!s.ability.checked ? (
-              <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-                <T v="small" style={{ flexShrink: 1 }}>할 수 있는 운동을 체크하면 추천이 더 정확해져요. 지금은 쉬운 운동 위주예요.</T>
-                <Button label="체크하기" onPress={() => router.push('/ability')} />
-              </Row>
-            ) : null}
-            <Row gap={Space.md}>
-              <Stepper label="주 운동 일수" value={p.days ?? 4} min={2} max={6} onChange={(days) => setP({ days })} />
-              <Stepper label="1회 운동 (분)" value={p.sessionMin ?? 60} step={15} min={30} max={120} onChange={(sessionMin) => setP({ sessionMin })} />
-            </Row>
-            <View style={{ gap: 6 }}><T v="muted">장소·장비</T>
-              <Segmented options={[{ v: 'gym', n: '헬스장' }, { v: 'dumbbell', n: '덤벨만' }, { v: 'bodyweight', n: '맨몸' }]} value={p.equipment ?? 'gym'}
-                onChange={(v) => v && setP({ equipment: v })} />
+          {routines.length ? (
+            <View style={{ gap: Space.sm }}>
+              <T v="label">내 루틴</T>
+              {routines.map((r) => {
+                const active = r.id === s.activeRoutineId;
+                return (
+                  <Card key={r.id} style={active ? { borderColor: c.accent, borderWidth: 2 } : undefined}>
+                    <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+                      <View style={{ flexShrink: 1 }}>
+                        <T v="title">{r.name}</T>
+                        <T v="small">{r.days.map((d) => d.name).join(' · ')}</T>
+                      </View>
+                      {active ? <Chip label="사용 중" tone="accent" /> : <Chip label={SOURCE[r.source]} tone="rest" />}
+                    </Row>
+                    <Row>
+                      {!active ? <Button label="이 루틴 쓰기" kind="primary" onPress={() => { update({ planMode: 'routine', activeRoutineId: r.id }); toast(`${r.name}으로 바꿨어요`); }} /> : null}
+                      <Button label="편집" onPress={() => router.push({ pathname: '/routine-edit', params: { id: r.id } })} />
+                      <View style={{ flex: 1 }} />
+                      <ConfirmButton label="삭제" onConfirm={() => { removeRoutine(r.id); if (active) update({ activeRoutineId: null }); }} />
+                    </Row>
+                  </Card>
+                );
+              })}
             </View>
-            <View style={{ gap: 6 }}><T v="muted">빼고 싶은 부위 (부상 등)</T>
-              <Pills danger options={MUSCLES} value={p.avoid ?? []}
-                onToggle={(k) => setP({ avoid: (p.avoid ?? []).includes(k) ? (p.avoid ?? []).filter((x) => x !== k) : [...(p.avoid ?? []), k] })} />
-            </View>
+          ) : null}
 
-            <View style={{ borderTopWidth: 1, borderColor: c.line, paddingTop: Space.md, gap: Space.sm }}>
-              <T v="title">{rec.name}</T>
-              <T v="small">설정 탭의 목표·경력·나이로 세트 수를, 장비로 운동을 골랐어요.</T>
+          <View style={{ gap: Space.sm }}>
+            <T v="label">{routines.length ? '새 루틴' : '루틴 고르기'}</T>
+            <Card>
+              <View>
+                <T v="small">추천</T>
+                <T v="title">{rec.name}</T>
+              </View>
               {rec.days.map((d) => (
                 <View key={d.key} style={{ gap: 2 }}>
-                  <T style={{ fontWeight: '700' }}>{d.name}{schedule === 'weekday' && d.weekdays.length ? ` · ${d.weekdays.map((w) => DOW[w]).join('')}` : ''} <T v="small">{d.exercises.reduce((a, e) => a + e.sets, 0)}세트</T></T>
+                  <Row style={{ justifyContent: 'space-between' }}>
+                    <T style={{ fontWeight: '600' }}>{d.name}</T>
+                    <T v="small">{d.exercises.length}개 · {d.exercises.reduce((a, e) => a + e.sets, 0)}세트</T>
+                  </Row>
                   {peek ? <T v="small">{d.exercises.map((e) => `${e.name} ${e.sets}`).join(' · ')}</T> : null}
                 </View>
               ))}
-              <Button label={peek ? '운동 접기' : '운동 보기'} kind="ghost" onPress={() => setPeek(!peek)} style={{ alignSelf: 'flex-start' }} />
-              <VolumeCheckView checks={recVol} min={s.min} max={s.max} />
-              {recVol.some((v) => v.status === 'low') ? (
-                <T v="small">1회 운동 시간에 맞추느라 일부 부위가 범위보다 적어요. 시간을 늘리거나 &apos;수정해서 쓰기&apos;로 세트를 더할 수 있어요.</T>
-              ) : null}
-            </View>
-            <Row style={{ flexWrap: 'nowrap' }}>
-              <Button label="수정해서 쓰기" style={{ flex: 1 }} onPress={() => {
-                const id = save({ ...rec, source: 'edited' });
-                router.push({ pathname: '/routine-edit', params: { id } });
-              }} />
-              <Button label="이대로 쓰기" kind="primary" style={{ flex: 1 }} onPress={() => { save(rec); toast('추천 루틴을 시작해요'); router.back(); }} />
-            </Row>
-          </Card>
+              <Button label={peek ? '접기' : '운동 보기'} kind="ghost" onPress={() => setPeek(!peek)} style={{ alignSelf: 'flex-start' }} />
+              <Row style={{ flexWrap: 'nowrap' }}>
+                <Button label="수정해서 쓰기" style={{ flex: 1 }} onPress={() => {
+                  const id = save({ ...rec, source: 'edited' });
+                  router.push({ pathname: '/routine-edit', params: { id } });
+                }} />
+                <Button label="이대로 쓰기" kind="primary" style={{ flex: 1 }} onPress={() => { save(rec); toast('루틴을 시작해요'); router.back(); }} />
+              </Row>
+            </Card>
 
-          <Button label="+ 직접 짜기" onPress={() => {
-            const id = save({ name: '내 루틴', source: 'custom', schedule, days: [{ key: newId(), name: 'Day 1', weekdays: schedule === 'weekday' ? [1] : [], exercises: [] }] });
-            router.push({ pathname: '/routine-edit', params: { id } });
-          }} />
-
-          {routines.length ? <T v="label">내 루틴</T> : null}
-          {routines.map((r) => {
-            const active = r.id === s.activeRoutineId;
-            return (
-              <Card key={r.id} style={active ? { borderColor: c.accent, borderWidth: 2 } : undefined}>
-                <Row style={{ justifyContent: 'space-between' }}>
-                  <View style={{ flexShrink: 1 }}>
-                    <T v="title">{r.name}</T>
-                    <T v="small">{SOURCE[r.source]} · {r.days.length}일 · {r.schedule === 'rotation' ? '순서대로 반복' : '요일 고정'}</T>
-                  </View>
-                  {active ? <Chip label="사용 중" tone="accent" /> : null}
+            <Disclosure title="추천 조건" meta={`주 ${p.days ?? 4}일 · ${p.sessionMin ?? 60}분`}>
+              <Card>
+                <Row gap={Space.md}>
+                  <Stepper label="주 운동 일수" value={p.days ?? 4} min={2} max={6} onChange={(days) => setP({ days })} />
+                  <Stepper label="1회 (분)" value={p.sessionMin ?? 60} step={15} min={30} max={120} onChange={(sessionMin) => setP({ sessionMin })} />
                 </Row>
-                <Row>
-                  {!active ? <Button label="이 루틴 쓰기" kind="primary" onPress={() => { update({ planMode: 'routine', activeRoutineId: r.id }); setSchedule(r.schedule); toast(`${r.name}으로 바꿨어요`); }} /> : null}
-                  <Button label="편집" onPress={() => router.push({ pathname: '/routine-edit', params: { id: r.id } })} />
-                  <ConfirmButton label="삭제" onConfirm={() => {
-                    removeRoutine(r.id);
-                    if (active) update({ activeRoutineId: null });
-                    toast('루틴을 삭제했어요');
-                  }} />
-                </Row>
+                <Segmented options={[{ v: 'gym', n: '헬스장' }, { v: 'dumbbell', n: '덤벨만' }, { v: 'bodyweight', n: '맨몸' }]} value={p.equipment ?? 'gym'}
+                  onChange={(v) => v && setP({ equipment: v })} />
+                <View style={{ gap: 6 }}><T v="muted">뺄 부위</T>
+                  <Pills danger options={MUSCLES} value={p.avoid ?? []}
+                    onToggle={(k) => setP({ avoid: (p.avoid ?? []).includes(k) ? (p.avoid ?? []).filter((x) => x !== k) : [...(p.avoid ?? []), k] })} />
+                </View>
+                {!s.ability.checked ? <Button label="할 수 있는 운동 체크" onPress={() => router.push('/ability')} style={{ alignSelf: 'flex-start' }} /> : null}
               </Card>
-            );
-          })}
+            </Disclosure>
+
+            <Disclosure title="주간 볼륨" meta={low.length ? `${low.map((v) => v.name).join(', ')} 부족` : '범위 안'}>
+              <Card><VolumeCheckView checks={recVol} min={s.min} max={s.max} /></Card>
+            </Disclosure>
+
+            <Button label="직접 짜기" onPress={() => {
+              const id = save({ name: '내 루틴', source: 'custom', schedule: 'rotation', days: [{ key: newId(), name: 'Day 1', weekdays: [], exercises: [] }] });
+              router.push({ pathname: '/routine-edit', params: { id } });
+            }} />
+          </View>
         </>
-      ) : null}
-    </ScrollView>
+      )}
+    </Page>
   );
 }

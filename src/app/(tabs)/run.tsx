@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
+import { Sheet } from '@/components/layout';
 import { PaceTimeline } from '@/components/pace-timeline';
 import { RouteView } from '@/components/route-view';
 import { useToast } from '@/components/toast';
@@ -40,6 +41,8 @@ export default function RunScreen() {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [voiceSheet, setVoiceSheet] = useState(false);
   const opts = settings.run;
   const setOpts = (patch: Partial<RunOptions>) => update({ run: { ...opts, ...patch } });
   const setPlan = (patch: Partial<IntervalPlanData>) => setOpts({ interval: { ...opts.interval, ...patch } });
@@ -84,51 +87,68 @@ export default function RunScreen() {
 
   return (
     <Screen title="러닝" sub={`최근 7일 ${weekKm.toFixed(1)}km`}>
-      {available === false ? <Banner text="러닝 기록은 휴대폰 앱에서만 쓸 수 있어요. 웹이나 Expo Go에서는 화면이 꺼지면 기록이 멈춰요." /> : null}
+      {available === false ? <Banner text="러닝 기록은 설치한 앱에서만 쓸 수 있어요." /> : null}
 
       {run.status === 'idle' ? (
-        <Card>
+        <Card style={{ gap: Space.lg }}>
           <Segmented options={[{ v: 'free', n: '자유 러닝' }, { v: 'interval', n: '인터벌' }]} value={opts.mode} onChange={(v) => v && setOpts({ mode: v })} />
           {opts.mode === 'interval' ? (
-            <>
-              <Pills options={PRESETS.map((p) => ({ k: p.n, n: p.n }))} value={null}
-                onToggle={(k) => setPlan(PRESETS.find((p) => p.n === k)!.p)} />
-              <Row gap={Space.md}>
-                <Stepper label="달리기 (분)" value={opts.interval.workS / 60} step={0.5} min={0.5} max={30} onChange={(v) => setPlan({ workS: Math.round(v * 60) })} />
-                <Stepper label="회복 (분)" value={opts.interval.restS / 60} step={0.5} min={0} max={30} onChange={(v) => setPlan({ restS: Math.round(v * 60) })} />
+            <View style={{ gap: Space.sm }}>
+              <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+                <View style={{ flexShrink: 1 }}>
+                  <T v="title">{fmtDuration(opts.interval.workS)} / {fmtDuration(opts.interval.restS)} × {opts.interval.repeats}</T>
+                  <T v="small">총 {fmtDuration(planTotalS(planPhases))}{opts.interval.targetPaceS ? ` · 목표 ${fmtPace(opts.interval.targetPaceS)}` : ''}</T>
+                </View>
+                <Button label="편집" kind="ghost" onPress={() => setEditing(true)} />
               </Row>
-              <Row gap={Space.md}>
-                <Stepper label="반복" value={opts.interval.repeats} min={1} max={30} onChange={(v) => setPlan({ repeats: v })} />
-                <Stepper label="목표 페이스 /km" value={opts.interval.targetPaceS ?? 0} step={5} min={0} max={900}
-                  format={(v) => (v ? fmtPace(v) : '없음')}
-                  onChange={(v) => setPlan({ targetPaceS: v ? (opts.interval.targetPaceS ? v : 330) : null })} />
-              </Row>
-              <Row gap={Space.md}>
-                <Stepper label="워밍업 (분)" value={opts.interval.warmupS / 60} min={0} max={30} onChange={(v) => setPlan({ warmupS: v * 60 })} />
-                <Stepper label="쿨다운 (분)" value={opts.interval.cooldownS / 60} min={0} max={30} onChange={(v) => setPlan({ cooldownS: v * 60 })} />
-              </Row>
-              {/* the plan as a strip of phases, proportional to time */}
-              <View style={{ flexDirection: 'row', height: 14, borderRadius: Radius.sm, overflow: 'hidden', gap: 1 }}>
+              <View style={{ flexDirection: 'row', height: 10, borderRadius: Radius.sm, overflow: 'hidden', gap: 1 }}>
                 {planPhases.map((p, i) => (
                   <View key={i} style={{ flex: p.endS - p.startS, backgroundColor: phaseColor(p.kind), opacity: p.kind === 'work' ? 1 : 0.45 }} />
                 ))}
               </View>
-              <T v="small">총 {fmtDuration(planTotalS(planPhases))} · 구간이 바뀔 때, 달리기 절반에서, 끝나기 10초 전에 음성으로 알려줘요</T>
-            </>
-          ) : (
-            <View style={{ gap: 6 }}>
-              <T v="muted">음성 안내</T>
-              <Pills options={[{ k: 'km', n: '1km마다' }, { k: '5', n: '5분마다' }, { k: '10', n: '10분마다' }]}
-                value={[...(opts.kmAlert ? ['km'] : []), ...(opts.everyMin ? [String(opts.everyMin)] : [])]}
-                onToggle={(k) => (k === 'km' ? setOpts({ kmAlert: !opts.kmAlert }) : setOpts({ everyMin: opts.everyMin === Number(k) ? 0 : Number(k) }))} />
             </View>
-          )}
+          ) : null}
+          <Button label={busy ? '준비 중…' : opts.mode === 'interval' ? '인터벌 시작' : '러닝 시작'} kind="primary" disabled={busy} onPress={() => void start()} style={{ paddingVertical: 16 }} />
           <Row style={{ justifyContent: 'space-between' }}>
-            <T v="muted">음성 안내 {opts.voice ? '켜짐' : '꺼짐'}</T>
-            <Button label={opts.voice ? '끄기' : '켜기'} kind="ghost" onPress={() => setOpts({ voice: !opts.voice })} />
+            <T v="small">음성 안내 {opts.voice ? (opts.mode === 'interval' ? '켜짐' : [opts.kmAlert ? '1km마다' : null, opts.everyMin ? `${opts.everyMin}분마다` : null].filter(Boolean).join(' · ') || '켜짐') : '꺼짐'}</T>
+            <Button label="옵션" kind="ghost" onPress={() => setVoiceSheet(true)} />
           </Row>
+          {problem ? (
+            <View style={{ gap: Space.sm }}>
+              <Banner text={problem.message} />
+              {problem.openSettings ? <Button label="설정 열기" onPress={openSettings} style={{ alignSelf: 'flex-start' }} /> : null}
+            </View>
+          ) : null}
         </Card>
       ) : null}
+
+      <Sheet open={editing} title="인터벌" onClose={() => setEditing(false)}>
+        <Pills options={PRESETS.map((p) => ({ k: p.n, n: p.n }))} value={null}
+          onToggle={(k) => setPlan(PRESETS.find((p) => p.n === k)!.p)} />
+        <Row gap={Space.md}>
+          <Stepper label="달리기 (분)" value={opts.interval.workS / 60} step={0.5} min={0.5} max={30} onChange={(v) => setPlan({ workS: Math.round(v * 60) })} />
+          <Stepper label="회복 (분)" value={opts.interval.restS / 60} step={0.5} min={0} max={30} onChange={(v) => setPlan({ restS: Math.round(v * 60) })} />
+        </Row>
+        <Row gap={Space.md}>
+          <Stepper label="반복" value={opts.interval.repeats} min={1} max={30} onChange={(v) => setPlan({ repeats: v })} />
+          <Stepper label="목표 페이스 /km" value={opts.interval.targetPaceS ?? 0} step={5} min={0} max={900}
+            format={(v) => (v ? fmtPace(v) : '없음')}
+            onChange={(v) => setPlan({ targetPaceS: v ? (opts.interval.targetPaceS ? v : 330) : null })} />
+        </Row>
+        <Row gap={Space.md}>
+          <Stepper label="워밍업 (분)" value={opts.interval.warmupS / 60} min={0} max={30} onChange={(v) => setPlan({ warmupS: v * 60 })} />
+          <Stepper label="쿨다운 (분)" value={opts.interval.cooldownS / 60} min={0} max={30} onChange={(v) => setPlan({ cooldownS: v * 60 })} />
+        </Row>
+      </Sheet>
+
+      <Sheet open={voiceSheet} title="음성 안내" onClose={() => setVoiceSheet(false)}>
+        <Segmented options={[{ v: 'on', n: '켜기' }, { v: 'off', n: '끄기' }]} value={opts.voice ? 'on' : 'off'} onChange={(v) => v && setOpts({ voice: v === 'on' })} />
+        {opts.voice && opts.mode === 'free' ? (
+          <Pills options={[{ k: 'km', n: '1km마다' }, { k: '5', n: '5분마다' }, { k: '10', n: '10분마다' }]}
+            value={[...(opts.kmAlert ? ['km'] : []), ...(opts.everyMin ? [String(opts.everyMin)] : [])]}
+            onToggle={(k) => (k === 'km' ? setOpts({ kmAlert: !opts.kmAlert }) : setOpts({ everyMin: opts.everyMin === Number(k) ? 0 : Number(k) }))} />
+        ) : null}
+      </Sheet>
 
       {pos && run.status !== 'idle' ? (
         <View style={{ backgroundColor: pos.phase ? (pos.phase.kind === 'work' ? c.accentSoft : pos.phase.kind === 'rest' ? c.okSoft : c.restSoft) : c.okSoft, borderRadius: Radius.md, padding: Space.lg, gap: Space.sm }}>
@@ -148,6 +168,7 @@ export default function RunScreen() {
         </View>
       ) : null}
 
+      {run.status !== 'idle' ? (
       <Card style={{ gap: Space.lg }}>
         <View style={{ alignItems: 'center', gap: 2 }}>
           <T v="big" style={{ fontSize: 64, lineHeight: 70 }}>{fmtKm(run.distanceM)}</T>
@@ -162,9 +183,7 @@ export default function RunScreen() {
         {run.status === 'paused' ? <T v="muted" style={{ textAlign: 'center' }}>일시정지 중 · 이 동안의 거리와 시간은 빼고 계산해요</T> : null}
         {gpsWeak ? <T v="small" style={{ textAlign: 'center', color: c.warn }}>GPS 신호를 찾는 중이에요. 하늘이 트인 곳에서 더 정확해요.</T> : null}
 
-        {run.status === 'idle' ? (
-          <Button label={busy ? '준비 중…' : opts.mode === 'interval' ? '인터벌 시작' : '러닝 시작'} kind="primary" disabled={busy} onPress={() => void start()} style={{ paddingVertical: 16 }} />
-        ) : (
+        {(
           <Row style={{ flexWrap: 'nowrap' }}>
             {run.status === 'running'
               ? <Button label="일시정지" onPress={pauseRun} style={{ flex: 1, paddingVertical: 14 }} />
@@ -178,20 +197,11 @@ export default function RunScreen() {
               }} />
           </Row>
         )}
-        {run.status !== 'idle' ? (
-          <ConfirmButton label="기록 버리기" confirmLabel="정말 버리기" onConfirm={() => { void discardRun(); toast('기록을 버렸어요'); }} style={{ alignSelf: 'center' }} />
-        ) : null}
-        {problem ? (
-          <View style={{ gap: Space.sm }}>
-            <Banner text={problem.message} />
-            {problem.openSettings ? <Button label="설정 열기" onPress={openSettings} style={{ alignSelf: 'flex-start' }} /> : null}
-          </View>
-        ) : null}
+        <ConfirmButton label="기록 버리기" confirmLabel="정말 버리기" onConfirm={() => { void discardRun(); toast('기록을 버렸어요'); }} style={{ alignSelf: 'center' }} />
+        {problem ? <Banner text={problem.message} /> : null}
       </Card>
-
-      {run.status === 'idle' ? (
-        <T v="small">시작하면 화면을 끄고 주머니에 넣어도 계속 기록해요. 끝난 러닝은 다리 회복도에 반영돼서 다음 날 하체 추천이 조정돼요.</T>
       ) : null}
+
 
       <T v="label">기록</T>
       {!runs.length ? <T v="muted" style={{ textAlign: 'center', paddingVertical: Space.lg }}>아직 러닝 기록이 없어요.</T> : null}

@@ -4,6 +4,7 @@ import { AppState, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExName } from '@/components/exercise-menu';
+import { Sheet } from '@/components/layout';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, Chip, ConfirmButton, Pills, Row, Segmented, Stepper, T } from '@/components/ui';
 import { Radius, Space, usePalette } from '@/constants/theme';
@@ -34,6 +35,7 @@ export default function SessionScreen() {
   const updateSettings = useData((s) => s.updateSettings);
   const [now, setNow] = useState(() => Date.now());
   const [adding, setAdding] = useState(false);
+  const [options, setOptions] = useState(false);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -79,15 +81,14 @@ export default function SessionScreen() {
         </View>
         {ended
           ? <Button label="닫기" onPress={() => router.replace('/')} />
-          : <ConfirmButton label="운동 끝" confirmLabel="끝내기" onConfirm={() => { finishSession(session.id); void stopRest(); }} style={{ borderWidth: 1, borderColor: c.line }} />}
+          : <Row style={{ flexWrap: 'nowrap' }}>
+              <Button label="옵션" kind="ghost" onPress={() => setOptions(true)} />
+              <ConfirmButton label="운동 끝" confirmLabel="끝내기" onConfirm={() => { finishSession(session.id); void stopRest(); }} style={{ borderWidth: 1, borderColor: c.line }} />
+            </Row>}
       </Row>
 
       {ended ? <Summary session={session} now={now} /> : (
-        <>
-          <Segmented options={[{ v: 'exercise', n: '운동별로 기록' }, { v: 'set', n: '세트별로 기록' }]} value={session.detail}
-            onChange={(v) => { if (v) { setDetail(session.id, v); updateSettings({ session: { ...settings.session, detail: v } }); } }} />
-          <RestBar />
-        </>
+        <RestBar />
       )}
 
       <View>
@@ -104,9 +105,26 @@ export default function SessionScreen() {
       {ended ? (
         <ConfirmButton label="이 운동 기록 삭제" confirmLabel="정말 삭제" style={{ alignSelf: 'center' }}
           onConfirm={() => { discardSession(session.id); toast('운동 기록을 삭제했어요'); router.replace('/'); }} />
-      ) : (
-        <T v="small">{settings.session.autoEndMin}분 동안 아무 기록이 없으면 마지막 세트 시각에 자동으로 끝나요. 기록은 세트마다 바로 저장돼서 오늘 추천에 반영돼요.</T>
-      )}
+      ) : null}
+
+      <Sheet open={options} title="운동 옵션" onClose={() => setOptions(false)}>
+        <View style={{ gap: 6 }}>
+          <T v="muted">기록 단위</T>
+          <Segmented options={[{ v: 'exercise', n: '운동별' }, { v: 'set', n: '세트별' }]} value={session.detail}
+            onChange={(v) => { if (v) { setDetail(session.id, v); updateSettings({ session: { ...settings.session, detail: v } }); } }} />
+        </View>
+        {session.detail === 'set' ? (
+          <View style={{ gap: 6 }}>
+            <T v="muted">세트마다 남길 것</T>
+            <Pills
+              options={[{ k: 'setInputs', n: '중량·반복' }, { k: 'setRpe', n: 'RPE' }, { k: 'restTimer', n: '휴식 타이머' }] as { k: 'setInputs' | 'setRpe' | 'restTimer'; n: string }[]}
+              value={(['setInputs', 'setRpe', 'restTimer'] as const).filter((k) => settings.session[k])}
+              onToggle={(k) => updateSettings({ session: { ...settings.session, [k]: !settings.session[k] } })} />
+          </View>
+        ) : null}
+        <ConfirmButton label="이 운동 버리기" confirmLabel="정말 버리기 (기록 삭제)" style={{ alignSelf: 'flex-start' }}
+          onConfirm={() => { setOptions(false); discardSession(session.id); void stopRest(); toast('운동을 버렸어요'); router.replace('/'); }} />
+      </Sheet>
     </ScrollView>
   );
 }

@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { Disclosure } from '@/components/layout';
 import { useToast } from '@/components/toast';
 import { Button, Card, ConfirmButton, DayNav, Field, Meter, NumField, Pills, Row, Screen, Stepper, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
@@ -73,10 +74,10 @@ export default function FoodScreen() {
           {macro('단백질', sum.p, t.p, c.accent)}
           {macro('탄수화물', sum.c, t.c, c.ok)}
           {macro('지방', sum.f, t.f, c.rest)}
-          <T v="small">
-            {t.trainingDay ? '운동한 날이라 탄수화물을 조금 더 잡았어요' : '운동 기록이 없는 날이라 탄수화물을 조금 줄였어요'} · {t.adjustLabel} · 유지 칼로리 약 {t.tdee}kcal
-          </T>
-          <T v="small">단백질 기준: {t.proteinBasis}{t.bmrFormula === 'katch' ? ' · 기초대사량은 제지방량으로 계산' : ''}</T>
+          <Disclosure title="계산 근거">
+            <T v="small">{t.adjustLabel} · 유지 약 {t.tdee}kcal · {t.trainingDay ? '운동한 날 +100' : '쉬는 날 −100'}</T>
+            <T v="small">단백질 {t.proteinBasis}</T>
+          </Disclosure>
         </Card>
       ) : (
         <Card>
@@ -132,7 +133,6 @@ export default function FoodScreen() {
           <ConfirmButton label="삭제" onConfirm={() => { removeMeal(m.id); toast('삭제됨'); }} />
         </View>
       ))}
-      <T v="small">기본 음식의 영양 성분은 일반적인 평균값이라 제품마다 다를 수 있어요. 포장지 표시가 있으면 직접 입력이 더 정확해요.</T>
     </Screen>
   );
 }

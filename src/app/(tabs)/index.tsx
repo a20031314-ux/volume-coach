@@ -2,21 +2,27 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
+import { Disclosure, Sheet } from '@/components/layout';
 import { LogSheet, type LogDraft } from '@/components/log-sheet';
-import { RoutineToday } from '@/components/routine-today';
+import { HintRow, PlanView, minutesFor, type PlanItem } from '@/components/plan-view';
+import { tiredText, useRoutinePlan } from '@/components/routine-today';
 import { useToast } from '@/components/toast';
-import { Banner, Button, Card, Chip, Meter, Pills, Row, Screen, Segmented, T, fmtN, toneColor } from '@/components/ui';
+import { Button, Meter, Pills, Row, Screen, Segmented, T, toneColor } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { useCoach } from '@/hooks/use-coach';
 import { useNow } from '@/hooks/use-now';
+import { abilityHints, knownExercises } from '@/lib/ability';
 import { buildPlan, deloadHint, suggestExercises } from '@/lib/coach';
 import { dow, fmt } from '@/lib/dates';
 import { MUSCLES } from '@/lib/exercises';
-import { ExName } from '@/components/exercise-menu';
-import { abilityHints, knownExercises } from '@/lib/ability';
 import { repRange } from '@/lib/profile';
 import { selectActiveSession, startSession } from '@/store/session-actions';
 import { live, useData } from '@/store/store';
+
+/** short body-region names for the title */
+const GROUP: Record<(typeof MUSCLES)[number]['k'], string> = {
+  chest: '가슴', back: '등', shoulder: '어깨', quad: '하체', ham: '하체', calf: '하체', bi: '팔', tri: '팔', abs: '복근',
+};
 
 export default function Today() {
   const c = usePalette();
@@ -25,181 +31,160 @@ export default function Today() {
   const { input, result } = useCoach(now);
   const settings = input.settings;
   const logs = useData((s) => s.logs);
+  const sessionsT = useData((s) => s.sessions);
   const checkin = useData((s) => s.checkins[result.T]);
   const setCheckin = useData((s) => s.setCheckin);
   const updateSettings = useData((s) => s.updateSettings);
-  const ck = settings.checkin;
+  const running = useData(selectActiveSession);
+  const routineRec = useData((s) => (s.settings.activeRoutineId ? s.routines[s.settings.activeRoutineId] : undefined));
+  const routine = settings.planMode === 'routine' && routineRec && !routineRec.deleted ? routineRec : null;
+
   const [swaps, setSwaps] = useState<Record<string, number>>({});
   const [draft, setDraft] = useState<LogDraft | null>(null);
-  const running = useData(selectActiveSession);
-  const routine = useData((s) => (s.settings.activeRoutineId ? s.routines[s.settings.activeRoutineId] : undefined));
-  const routineMode = settings.planMode === 'routine' && !!routine && !routine.deleted;
+  const [sheet, setSheet] = useState(false);
+  const [dayOverride, setDayOverride] = useState<number | null>(null);
 
+  const ck = settings.checkin;
+  const rd = result.readiness;
   const plan = useMemo(() => buildPlan(result, live(logs)), [result, logs]);
   const known = useMemo(() => knownExercises(live(logs)), [logs]);
-  const sessionsT = useData((s) => s.sessions);
+  const rp = useRoutinePlan(routine, result, dayOverride);
   const hints = useMemo(() => abilityHints(settings, live(sessionsT), now.getTime()), [settings, sessionsT, now]);
-  const hint = useMemo(() => deloadHint(result, input), [result, input]);
-  const total = plan.plan.reduce((a, s) => a + s.remaining, 0);
-  const rd = result.readiness;
-  const activeMuscles = MUSCLES.filter((m) => !settings.off.includes(m.k));
+  const deload = useMemo(() => deloadHint(result, input), [result, input]);
+  const doneToday = live(logs).filter((l) => l.date === result.T).reduce((a, l) => a + l.sets, 0);
   const sore = checkin?.sore ?? [];
+  const adjusted = rd.factor < 1 || sore.length > 0;
+
+  /* ---------- what to do today ---------- */
+  let title: string, items: PlanItem[], notice: Parameters<typeof PlanView>[0]['notice'] = null;
+  let startList: { name: string; muscle: (typeof MUSCLES)[number]['k']; sets: number }[];
+  if (routine) {
+    const d = rp.day;
+    title = d ? d.name : '쉬는 날';
+    items = (d?.exercises ?? []).map((e, i) => ({
+      key: `${e.name}-${i}`, name: e.name, muscle: e.muscle, sets: rp.adj(e.sets), recovery: rp.recovery[e.muscle] ?? 100,
+      detail: repRange(e.name, settings.profile),
+      onLog: () => setDraft({ exercise: e.name, muscle: e.muscle, sets: rp.adj(e.sets) }),
+    }));
+    startList = items.map((it) => ({ name: it.name, muscle: it.muscle, sets: it.sets }));
+    if (d && rp.tired.length) {
+      notice = rp.alt != null
+        ? { text: `${tiredText(rp.tired)} 회복 중`, action: `${routine.days[rp.alt].name} 먼저`, onPress: () => setDayOverride(rp.alt) }
+        : { text: `${tiredText(rp.tired)} 회복 중 · 세트를 줄여도 좋아요` };
+    }
+  } else {
+    const groups = [...new Set(plan.plan.map((s) => GROUP[s.k]))];
+    title = groups.length ? groups.join(' · ') : '오늘은 쉬어도 돼요';
+    items = plan.plan.flatMap((s) => suggestExercises(s, result, settings, swaps, known).map((e) => ({
+      key: `${s.k}:${e.slot}`, name: e.name, muscle: s.k, sets: e.sets, recovery: s.recPre,
+      tag: s.mode === 'light' ? '가볍게' : undefined,
+      detail: `${repRange(e.name, settings.profile)} · 이번 주 ${Math.round(s.done)}/${result.min}세트`,
+      onSwap: () => setSwaps((w) => ({ ...w, [`${s.k}:${e.slot}`]: (w[`${s.k}:${e.slot}`] || 0) + 1 })),
+      onLog: () => setDraft({ exercise: e.name, muscle: s.k, sets: e.sets }),
+    })));
+    startList = items.map((it) => ({ name: it.name, muscle: it.muscle, sets: it.sets }));
+  }
+  const totalSets = items.reduce((a, it) => a + it.sets, 0);
+  const meta = [
+    routine ? rp.label : null,
+    items.length ? `${items.length}개 · ${totalSets}세트 · 약 ${minutesFor(totalSets)}분` : null,
+    doneToday ? `오늘 ${doneToday}세트 완료` : null,
+    adjusted && !notice ? '컨디션 반영' : null,
+  ].filter(Boolean).join(' · ');
+
+  const start = running
+    ? { label: '이어서 하기', onPress: () => router.push({ pathname: '/session', params: { id: running.id } }) }
+    : {
+        label: items.length ? '운동 시작' : '빈 운동으로 시작',
+        onPress: () => {
+          const sid = startSession(startList, settings.session.detail, routine && rp.day ? { routineId: routine.id, dayKey: rp.day.key } : undefined);
+          setDayOverride(null);
+          router.push({ pathname: '/session', params: { id: sid } });
+        },
+      };
+
+  const hint = deload
+    ? { key: `deload:${result.W}`, text: deload, action: '디로드 켜기', run: () => updateSettings({ deload: true }) }
+    : hints[0]
+      ? { key: hints[0].key, text: hints[0].text, action: hints[0].action.label, run: () => {
+          const a = hints[0].action;
+          if ('route' in a) router.push(a.route as '/ability');
+          else { updateSettings({ ...a.patch, dismissed: [...settings.dismissed, hints[0].key] }); toast('반영했어요'); }
+        } }
+      : null;
+  const showHint = hint && !settings.dismissed.includes(hint.key);
 
   return (
-    <Screen title="오늘" sub={`${fmt(result.W)} – ${fmt(result.E)} · 남은 ${result.daysLeft}일${settings.deload ? ' · 디로드' : ''}`}>
-      {hint ? <Banner text={hint} /> : null}
-      {hints.map((h) => (
-        <Card key={h.key} style={{ borderColor: c.accent }}>
-          <T>{h.text}</T>
-          <Row>
-            <Button label={h.action.label} kind="primary" onPress={() => {
-              if ('route' in h.action) router.push(h.action.route as '/ability');
-              else { updateSettings({ ...h.action.patch, dismissed: [...settings.dismissed, h.key] }); toast('반영했어요'); }
-            }} />
-            <Button label={h.key === 'ability-intro' ? '나중에' : '괜찮아요'} kind="ghost" onPress={() => updateSettings({ dismissed: [...settings.dismissed, h.key] })} />
-          </Row>
-        </Card>
-      ))}
+    <Screen title="오늘" sub={fmt(result.T)}
+      right={<Button label={adjusted ? '조정 •' : '조정'} kind="ghost" onPress={() => setSheet(true)} accessibilityLabel="오늘 조정" />}>
+      <PlanView title={title} meta={meta} notice={notice} start={start} items={items} ready={settings.ready}
+        empty={routine ? undefined : '이번 주 목표를 채웠거나 남은 부위가 회복 중이에요.'} />
 
-      {ck.sleep || ck.energy || ck.sore ? (
-        <Card>
-          <Row style={{ justifyContent: 'space-between' }}>
-            <T v="title" style={{ fontSize: 15 }}>오늘 컨디션</T>
-            <Button label="숨기기" kind="ghost" onPress={() => {
-              updateSettings({ checkin: { ...ck, sleep: false, energy: false, sore: false } });
-              toast('컨디션 체크를 숨겼어요. 설정에서 다시 켤 수 있어요');
-            }} />
-          </Row>
-          {ck.sleep ? (
-            <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
-              <T v="muted" style={{ width: 52 }}>수면</T>
-              <Segmented options={[{ v: 0, n: '부족' }, { v: 1, n: '보통' }, { v: 2, n: '충분' }]} value={checkin?.sleep ?? null}
-                onChange={(v) => setCheckin(result.T, { sleep: v as 0 | 1 | 2 | null })} />
-            </Row>
-          ) : null}
-          {ck.energy ? (
-            <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
-              <T v="muted" style={{ width: 52 }}>컨디션</T>
-              <Segmented options={[{ v: 0, n: '처짐' }, { v: 1, n: '보통' }, { v: 2, n: '좋음' }]} value={checkin?.energy ?? null}
-                onChange={(v) => setCheckin(result.T, { energy: v as 0 | 1 | 2 | null })} />
-            </Row>
-          ) : null}
-          {ck.sore ? (
-            <View style={{ gap: 6 }}>
-              <T v="muted">근육통 있는 부위</T>
-              <Pills danger options={activeMuscles} value={sore}
-                onToggle={(k) => setCheckin(result.T, { sore: sore.includes(k) ? sore.filter((x) => x !== k) : [...sore, k] })} />
+      {showHint && hint ? (
+        <HintRow text={hint.text} action={hint.action} onAction={hint.run}
+          onDismiss={() => updateSettings({ dismissed: [...settings.dismissed, hint.key] })} />
+      ) : null}
+
+      <Disclosure title="부위별 회복도">
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+          {result.stats.map((s) => (
+            <View key={s.k} style={{ flexBasis: '31%', flexGrow: 1, backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: 8, padding: 8, gap: 3 }}>
+              <T v="small" numberOfLines={1}>{s.n}</T>
+              <T v="num">{s.recNow}%</T>
+              <Meter pct={s.recNow} color={toneColor(c, s.recNow, settings.ready)} height={4} />
+              {s.mode === 'rest' && s.nextOK && s.nextOK !== result.T ? <T v="small">{dow(s.nextOK)}부터</T> : null}
             </View>
-          ) : null}
-          <View style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: c.line, paddingTop: Space.md, gap: 2 }}>
-            <Row style={{ alignItems: 'baseline' }}><T v="muted">오늘 권장 볼륨</T><T v="num">{rd.cap}</T><T v="muted">세트</T></Row>
-            <T v="small">{rd.why.length ? `${rd.why.join(' · ')} 반영` : rd.hasCheckin ? '평소대로 진행' : ck.sleep || ck.energy ? '수면·컨디션을 고르면 볼륨을 조정해요' : '근육통 부위는 회복도를 낮춰 계산해요'}</T>
-          </View>
-        </Card>
-      ) : rd.why.length ? (
-        <T v="small">오늘 권장 볼륨 {rd.cap}세트 · {rd.why.join(' · ')} 반영</T>
-      ) : null}
+          ))}
+        </View>
+      </Disclosure>
 
-      <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-        <T v="small" style={{ flexShrink: 1 }}>운동 방식 · {routineMode ? `루틴형 (${routine!.name})` : '자율형 (규칙 기반 추천)'}</T>
-        <Button label="바꾸기" kind="ghost" onPress={() => router.push('/routine')} />
-      </Row>
-
-      {routineMode ? <RoutineToday routine={routine!} result={result} running={running} /> : (<>
-      <Row gap={Space.lg} style={{ alignItems: 'baseline' }}>
-        <Row gap={4} style={{ alignItems: 'baseline' }}><T v="big">{total}</T><T v="muted">세트 남음</T></Row>
-        <Row gap={4} style={{ alignItems: 'baseline' }}><T v="big">{plan.plan.length}</T><T v="muted">부위</T></Row>
-      </Row>
-
-      {running ? (
-        <Card style={{ borderColor: c.accent, borderWidth: 2 }}>
-          <T v="title">운동 진행 중</T>
-          <T v="muted">
-            {new Date(running.startedAt).toTimeString().slice(0, 5)} 시작 · 운동 {running.exercises.filter((e) => e.status === 'done').length}/{running.exercises.length}개
-          </T>
-          <Button label="이어서 하기" kind="primary" onPress={() => router.push({ pathname: '/session', params: { id: running.id } })} style={{ paddingVertical: 13 }} />
-        </Card>
-      ) : (
-        <Button label={plan.plan.length ? '운동 시작' : '빈 운동으로 시작'} kind="primary" style={{ paddingVertical: 15 }}
-          onPress={() => {
-            const list = plan.plan.flatMap((s) => suggestExercises(s, result, settings, swaps, known).map((e) => ({ name: e.name, muscle: s.k, sets: e.sets })));
-            const sid = startSession(list, settings.session.detail);
-            router.push({ pathname: '/session', params: { id: sid } });
-          }} />
-      )}
-
-      {!plan.plan.length ? (
-        <Card><T v="muted" style={{ textAlign: 'center' }}>오늘 채울 부위가 없어요. 이번 주 최소치를 채웠거나 남은 부위가 아직 회복 중이에요.</T></Card>
-      ) : null}
-
-      {plan.plan.map((s) => {
-        const ex = suggestExercises(s, result, settings, swaps, known);
-        return (
-          <Card key={s.k}>
-            <Row style={{ justifyContent: 'space-between' }}>
-              <T v="title">{s.n}</T>
-              <Chip label={s.status.label} tone={s.status.tone} />
-            </Row>
-            <T v="muted">
-              회복 <T v="muted" style={{ color: toneColor(c, s.recPre, settings.ready), fontWeight: '700' }}>{s.recPre}%</T>
-              {` · 이번 주 ${fmtN(s.done)} / ${result.min}~${result.max}세트 · 운동 ${s.names.length}/${settings.minEx}종 · 남은 기회 ${s.opp}회`}
-              {s.todayS ? ` · 오늘 ${fmtN(s.todayS)}세트 함` : ''}
-            </T>
-            {s.mode === 'light' ? <T v="small">회복이 덜 됐지만 이번 주 목표가 급해요. 세트를 줄이고 고중량 복합 운동은 뒤로 뺐어요.</T> : null}
-            {ex.map((e) => (
-              <View key={e.slot} style={{ borderTopWidth: 1, borderStyle: 'dashed', borderColor: c.line, paddingTop: Space.sm, flexDirection: 'row', alignItems: 'center', gap: Space.sm }}>
-                <View style={{ flex: 1, minWidth: 0 }}>
-                  <ExName name={e.name} />
-                  <T v="small">{[repRange(e.name, settings.profile), e.isNew && s.names.length < settings.minEx ? '이번 주 새 종류' : e.heavy ? '고중량 복합' : ''].filter(Boolean).join(' · ')}</T>
-                </View>
-                <T v="num">{e.sets}<T v="small">세트</T></T>
-                <Button label="교체" kind="ghost" accessibilityLabel={`${e.name} 대신 다른 운동`}
-                  onPress={() => setSwaps((w) => ({ ...w, [`${s.k}:${e.slot}`]: (w[`${s.k}:${e.slot}`] || 0) + 1 }))} />
-                <Button label="기록" kind="primary" onPress={() => setDraft({ exercise: e.name, muscle: s.k, sets: e.sets })} />
+      <Sheet open={sheet} title="오늘 조정" onClose={() => setSheet(false)}>
+        {ck.sleep || ck.energy || ck.sore ? (
+          <View style={{ gap: Space.md }}>
+            {ck.sleep ? (
+              <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
+                <T v="muted" style={{ width: 52 }}>수면</T>
+                <Segmented options={[{ v: 0, n: '부족' }, { v: 1, n: '보통' }, { v: 2, n: '충분' }]} value={checkin?.sleep ?? null}
+                  onChange={(v) => setCheckin(result.T, { sleep: v as 0 | 1 | 2 | null })} />
+              </Row>
+            ) : null}
+            {ck.energy ? (
+              <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
+                <T v="muted" style={{ width: 52 }}>컨디션</T>
+                <Segmented options={[{ v: 0, n: '처짐' }, { v: 1, n: '보통' }, { v: 2, n: '좋음' }]} value={checkin?.energy ?? null}
+                  onChange={(v) => setCheckin(result.T, { energy: v as 0 | 1 | 2 | null })} />
+              </Row>
+            ) : null}
+            {ck.sore ? (
+              <View style={{ gap: 6 }}>
+                <T v="muted">근육통</T>
+                <Pills danger options={MUSCLES.filter((m) => !settings.off.includes(m.k))} value={sore}
+                  onToggle={(k) => setCheckin(result.T, { sore: sore.includes(k) ? sore.filter((x) => x !== k) : [...sore, k] })} />
               </View>
-            ))}
-          </Card>
-        );
-      })}
-
-      {plan.later.length ? (
-        <>
-          <T v="label">시간 남으면</T>
-          <Row>
-            {plan.later.map((s) => (
-              <Button key={s.k} label={`${s.n} +${s.remaining}`} onPress={() => router.navigate({ pathname: '/log', params: { muscle: s.k } })} />
-            ))}
-          </Row>
-        </>
-      ) : null}
-
-      {plan.doneToday.length ? (
-        <>
-          <T v="label">오늘 완료</T>
-          <Row>{plan.doneToday.map((s) => <Chip key={s.k} tone="ok" label={`${s.n} ${fmtN(s.todayS)}세트`} />)}</Row>
-        </>
-      ) : null}
-
-      </>)}
-
-      <T v="label">부위별 회복도</T>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-        {result.stats.map((s) => (
-          <View key={s.k} style={{ flexBasis: '31%', flexGrow: 1, backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: 8, padding: 8, gap: 3 }}>
-            <T v="small" numberOfLines={1}>{s.n}{s.sore ? ' · 근육통' : ''}</T>
-            <T v="num">{s.recNow}%</T>
-            <Meter pct={s.recNow} color={toneColor(c, s.recNow, settings.ready)} height={4} />
-            {s.mode === 'rest' && s.nextOK ? <T v="small">{s.nextOK === result.T ? '오늘' : dow(s.nextOK)}부터 가능</T> : null}
+            ) : null}
+            {rd.why.length ? <T v="small">{rd.why.join(' · ')} → 오늘 최대 {rd.cap}세트</T> : null}
           </View>
-        ))}
-      </View>
+        ) : null}
 
-      {!settings.profile.age && !settings.profile.years ? (
-        <Button label="설정에서 나이·경력을 입력하면 내 몸에 맞춰 추천해요" onPress={() => router.navigate('/settings')} />
-      ) : null}
-      <T v="small">
-        회복도 {settings.ready}% 이상인 부위만 정상 추천해요. 렉이 차 있으면 교체, 부위를 바꾸려면 &apos;시간 남으면&apos;에서 고르세요.
-      </T>
+        {routine ? (
+          <View style={{ gap: 6 }}>
+            <T v="muted">다른 날 하기</T>
+            <Pills options={routine.days.map((d, i) => ({ k: String(i), n: d.name }))} value={rp.index >= 0 ? String(rp.index) : null}
+              onToggle={(k) => { setDayOverride(Number(k)); setSheet(false); }} />
+          </View>
+        ) : plan.later.length ? (
+          <View style={{ gap: 6 }}>
+            <T v="muted">더 하고 싶다면</T>
+            <Pills options={plan.later.map((s) => ({ k: s.k, n: `${s.n} +${s.remaining}` }))} value={null}
+              onToggle={(k) => { setSheet(false); router.navigate({ pathname: '/log', params: { muscle: k } }); }} />
+          </View>
+        ) : null}
+
+        <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+          <T v="muted" style={{ flexShrink: 1 }}>{routine ? `루틴 · ${routine.name}` : '자율형 추천'}</T>
+          <Button label="운동 방식" onPress={() => { setSheet(false); router.push('/routine'); }} />
+        </Row>
+      </Sheet>
 
       <LogSheet draft={draft} onClose={() => setDraft(null)} onSaved={toast} />
     </Screen>

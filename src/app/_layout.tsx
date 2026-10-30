@@ -42,6 +42,11 @@ export default function RootLayout() {
               <Stack.Screen name="routine-edit" options={{ headerShown: true, title: '루틴 편집' }} />
               <Stack.Screen name="ability" options={{ headerShown: true, title: '할 수 있는 운동 체크' }} />
               <Stack.Screen name="exercises" options={{ headerShown: true, title: '운동 목록' }} />
+              <Stack.Screen name="prefs/profile" options={{ headerShown: true, title: '내 정보' }} />
+              <Stack.Screen name="prefs/body" options={{ headerShown: true, title: '인바디' }} />
+              <Stack.Screen name="prefs/rules" options={{ headerShown: true, title: '운동 규칙' }} />
+              <Stack.Screen name="prefs/workout" options={{ headerShown: true, title: '기록 방식' }} />
+              <Stack.Screen name="prefs/account" options={{ headerShown: true, title: '계정' }} />
               <Stack.Screen name="account" options={{ presentation: 'modal', headerShown: true, title: '계정' }} />
             </Stack>
             </ExerciseMenuProvider>

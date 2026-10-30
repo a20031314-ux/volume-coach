@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 
-import { Chip, Row, T, fmtN } from './ui';
+import { Chip, T, fmtN } from './ui';
 import { Space, usePalette } from '@/constants/theme';
 import { useCoach } from '@/hooks/use-coach';
 import { useNow } from '@/hooks/use-now';
@@ -15,7 +15,7 @@ export function WeekView() {
 
   return (
     <>
-      <T v="muted">막대 = 이번 주 세트, 옅은 띠 = 목표 범위 {result.min}~{result.max}세트.</T>
+      <T v="small">목표 {result.min}~{result.max}세트</T>
       <View>
         {result.stats.map((s) => (
           <View key={s.k} style={{ flexDirection: 'row', alignItems: 'center', gap: Space.md, paddingVertical: 10, borderBottomWidth: 1, borderColor: c.line }}>
@@ -37,9 +37,6 @@ export function WeekView() {
           </View>
         ))}
       </View>
-      <Row>
-        <T v="small">보조 부위는 {input.settings.sec ? `${input.settings.sec}세트로` : '계산하지 않고'} 집계해요. 예: 벤치프레스 4세트 = 가슴 4 + 삼두·어깨 각 {4 * input.settings.sec}.</T>
-      </Row>
     </>
   );
 }

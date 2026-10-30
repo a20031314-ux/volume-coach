@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { ScrollView } from 'react-native';
 
 import { useToast } from '@/components/toast';
-import { Banner, Button, Field, Segmented, T } from '@/components/ui';
+import { Banner, Button, Field, Segmented } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { useAuth } from '@/store/auth';
 
@@ -45,7 +45,6 @@ export default function Account() {
       <Field label="비밀번호 (8자 이상)" value={pw} onChangeText={setPw} secureTextEntry autoComplete={mode === 'in' ? 'current-password' : 'new-password'} textContentType={mode === 'in' ? 'password' : 'newPassword'} onSubmitEditing={submit} />
       {msg ? <Banner text={msg} /> : null}
       <Button kind="primary" label={busy ? '잠시만요…' : mode === 'in' ? '로그인' : '가입하기'} onPress={submit} disabled={busy} style={{ paddingVertical: 13 }} />
-      <T v="small">로그인하면 이 기기에 저장된 기록이 계정으로 올라가요. 계정과 기록은 설정에서 언제든 삭제할 수 있어요.</T>
     </ScrollView>
   );
 }

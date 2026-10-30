@@ -97,7 +97,7 @@ export default function Log() {
       </Card>
 
       <T v="label">기록</T>
-      {!days.length ? <T v="muted" style={{ textAlign: 'center', paddingVertical: Space.xl }}>아직 기록이 없어요. 위에서 첫 운동을 저장하거나 오늘 탭의 기록을 누르세요.</T> : null}
+      {!days.length ? <T v="muted" style={{ textAlign: 'center', paddingVertical: Space.xl }}>아직 기록이 없어요.</T> : null}
       {days.map(({ d, rows }) => (
         <View key={d}>
           <Row style={{ justifyContent: 'space-between', borderBottomWidth: 2, borderColor: c.ink, paddingBottom: 4, paddingTop: Space.md }}>
