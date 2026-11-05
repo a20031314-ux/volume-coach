@@ -1,6 +1,7 @@
 import { candidatesFor } from './ability';
 import { addDays, diffDays, iso, parse } from './dates';
 import { BIG_MUSCLES, HALF_LIFE, HEAVY, MUSCLES, MUSCLE_NAME, library, type Exercise } from './exercises';
+import { LEG_LOAD } from './elevation';
 import { recoveryMultiplier } from './profile';
 import type { Checkin, MuscleKey, Run, Settings, WorkoutLog } from './types';
 
@@ -16,6 +17,9 @@ export interface CoachInput {
 export const RUN_FATIGUE_PER_KM: Partial<Record<MuscleKey, number>> = { quad: 0.6, ham: 0.5, calf: 0.8 };
 /** Systemic load of one running km, in set-equivalents. */
 export const RUN_SYSTEMIC_PER_KM = 1;
+
+/** Running-km equivalent: hills count extra, walking much less than running. */
+const legKm = (r: Run) => ((r.elev?.flatEqM || r.distanceM) / 1000) * LEG_LOAD[r.kind ?? 'run'];
 
 export type Mode = 'go' | 'light' | 'rest';
 export type StatusTone = 'ok' | 'warn' | 'bad' | 'rest' | 'accent';
@@ -85,7 +89,7 @@ export function recoveryAt(mk: MuscleKey, when: number, input: CoachInput, befor
       if (r.deleted || (beforeDate && r.date >= beforeDate)) continue;
       const h = (when - r.endedAt) / H;
       if (h < 0 || h > 336) continue;
-      F += (r.distanceM / 1000) * perKm * Math.pow(0.5, h / half);
+      F += legKm(r) * perKm * Math.pow(0.5, h / half);
     }
   }
   return Math.max(0, Math.min(100, Math.round(100 - F * 10)));
@@ -106,7 +110,7 @@ export function readiness(input: CoachInput, T: string): Readiness {
     if (r.deleted || r.date >= T) continue;
     const h = (now - r.endedAt) / H;
     if (h < 0 || h > 336) continue;
-    S += (r.distanceM / 1000) * RUN_SYSTEMIC_PER_KM * Math.pow(0.5, h / 48);
+    S += legKm(r) * RUN_SYSTEMIC_PER_KM * Math.pow(0.5, h / 48);
   }
   const opt = s.checkin ?? { sleep: true, energy: true, sore: true, systemic: true };
   const ratio = opt.systemic ? S / Math.max(1, s.cap) : 0;

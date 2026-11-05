@@ -29,6 +29,15 @@ describe('dayActivity', () => {
     expect(a.activeMin).toBe(28);
   });
 
+  it('keeps recorded walks and hikes apart from running', () => {
+    const hike = { ...run(6, 120), id: 'h', kind: 'hike' as const, kcal: 300, elev: { gainM: 420 } as Run['elev'] };
+    const a = dayActivity(D, { logs: [], sessions: [], runs: [run(5, 28), hike], steps: { steps: 20000, meters: 14000 }, weightKg: 80, now: T0 });
+    expect(a.run.km).toBe(5);
+    expect(a.outdoor).toEqual({ km: 6, minutes: 120, kcal: 300, count: 1, gainM: 420 });
+    expect(a.walk?.km).toBe(3);
+    expect(a.activeMin).toBe(148);
+  });
+
   it('ignores other days and never goes negative', () => {
     const a = dayActivity(D, { logs: [log('x', 5, undefined, '2026-11-04')], sessions: [], runs: [run(5, 28)], steps: { steps: 3000, meters: 2000 }, weightKg: 70, now: T0 });
     expect(a.lift.sets).toBe(0);

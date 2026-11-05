@@ -1,3 +1,4 @@
+import type { ActivityKind, Elevation, RoutePoint } from './elevation';
 export type MuscleKey =
   | 'chest' | 'back' | 'shoulder' | 'quad' | 'ham' | 'bi' | 'tri' | 'calf' | 'abs';
 
@@ -66,8 +67,12 @@ export interface Run extends SyncMeta {
   paceSecPerKm: number | null;
   kcal: number;
   splits: { km: number; seconds: number }[];
-  /** simplified route as [lat, lng, segment] */
-  route: [number, number, number][];
+  /** run (default), walk or hike */
+  kind?: ActivityKind;
+  /** simplified route as [lat, lng, segment, gps altitude?] */
+  route: RoutePoint[];
+  /** climb, descent and grade; GPS-based at save time, replaced by terrain data when online */
+  elev?: Elevation | null;
   /** speed over time as [moving second, m/s] */
   timeline?: [number, number][];
   intervalPlan?: IntervalPlanData | null;
@@ -86,6 +91,8 @@ export interface RunOptions {
   /** announce every N minutes (0 = off) */
   everyMin: number;
   mode: 'free' | 'interval';
+  /** what to record; interval mode applies to running only */
+  kind?: ActivityKind;
   /** last used interval plan */
   interval: IntervalPlanData;
 }

@@ -21,7 +21,9 @@ import {
   spokenPace, type CueState, type IntervalPlan, type Phase, type SpeedSample,
 } from '@/lib/interval';
 import { body } from '@/lib/profile';
-import { acceptPoint, currentPace, haversine, runKcal, simplify, summarize, type GpsPoint } from '@/lib/run';
+import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/lib/elevation';
+import { acceptPoint, currentPace, haversine, simplify, summarize, type GpsPoint } from '@/lib/run';
+import { enrichElevation, gpsElevation } from '@/run/elevation-fetch';
 import { ensureNotifications } from '@/store/rest-timer';
 import { live, useData } from '@/store/store';
 
@@ -30,6 +32,7 @@ export const RUN_TASK = 'volume-coach-run-location';
 export type RunStatus = 'idle' | 'running' | 'paused';
 
 export interface RunSetup {
+  kind: ActivityKind;
   plan: IntervalPlan | null;
   voice: boolean;
   kmAlert: boolean;
@@ -55,7 +58,7 @@ interface ActiveRun extends RunSetup {
 const idle: ActiveRun = {
   status: 'idle', startedAt: 0, pausedMs: 0, pauseStart: null, seg: 0, points: [], speeds: [], distanceM: 0,
   lastFixAt: null, lastAccuracy: null, cues: initialCues, notifIds: [],
-  plan: null, voice: true, kmAlert: true, everyMin: 0,
+  kind: 'run', plan: null, voice: true, kmAlert: true, everyMin: 0,
 };
 
 /** AsyncStorage writes at most every 4 s; a long run's track is a few hundred KB. */
@@ -123,7 +126,7 @@ export function appendLocations(locs: Location.LocationObject[]) {
     for (const l of [...locs].sort((a, b) => a.timestamp - b.timestamp)) {
       if (l.timestamp < s.startedAt) continue;
       const ms = movingAt(s, l.timestamp);
-      const p: GpsPoint = { lat: l.coords.latitude, lng: l.coords.longitude, t: l.timestamp, acc: l.coords.accuracy, seg: s.seg, ms };
+      const p: GpsPoint = { lat: l.coords.latitude, lng: l.coords.longitude, t: l.timestamp, acc: l.coords.accuracy, seg: s.seg, ms, alt: l.coords.altitude };
       const prev = points[points.length - 1];
       const d = acceptPoint(prev, p);
       let v = dopplerSpeed(l.coords.speed, (l.coords as { speedAccuracy?: number | null }).speedAccuracy);
@@ -236,7 +239,7 @@ async function startUpdates() {
     pausesUpdatesAutomatically: false,
     showsBackgroundLocationIndicator: true,
     foregroundService: {
-      notificationTitle: '러닝 기록 중',
+      notificationTitle: `${KIND_NAME[useRun.getState().kind ?? 'run']} 기록 중`,
       notificationBody: '화면을 꺼도 거리를 계속 재고 있어요',
       notificationColor: '#2f47c9',
       killServiceOnDestroy: false,
@@ -272,7 +275,7 @@ export async function startRun(setup: RunSetup): Promise<StartResult> {
     useRun.setState({ ...idle });
     return { ok: false, message: `위치 기록을 시작하지 못했어요: ${(e as Error).message}` };
   }
-  if (setup.voice) speak([setup.plan ? '인터벌 러닝을 시작합니다' : '러닝을 시작합니다']);
+  if (setup.voice) speak([setup.plan ? '인터벌 러닝을 시작합니다' : { run: '러닝을', walk: '걷기를', hike: '등산을' }[setup.kind] + ' 시작합니다']);
   tickCues();
   void schedulePhaseNotifications();
   return { ok: true };
@@ -321,23 +324,34 @@ export async function finishRun(): Promise<number | null> {
   useRun.setState({ ...idle });
   if (sum.distanceM < 50) return null;
   const pace = movingS / (sum.distanceM / 1000);
-  if (s.voice) speak([`러닝 끝. 총 ${(sum.distanceM / 1000).toFixed(2)}킬로미터, 평균 페이스 ${spokenPace(pace)}`]);
+  if (s.voice) speak([`${KIND_NAME[s.kind ?? 'run']} 끝. 총 ${(sum.distanceM / 1000).toFixed(2)}킬로미터, 평균 페이스 ${spokenPace(pace)}`]);
   const data = useData.getState();
   const b = body(data.settings.profile, live(data.bodyComps));
-  data.addRun({
+  const kind = s.kind ?? 'run';
+  const route: RoutePoint[] = simplify(s.points).map((p) => {
+    const pt: RoutePoint = [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lng * 1e6) / 1e6, p.seg];
+    if (p.alt != null && Number.isFinite(p.alt)) pt.push(Math.round(p.alt * 10) / 10);
+    return pt;
+  });
+  const elev = gpsElevation(route);
+  const id = data.addRun({
     date: iso(new Date(s.startedAt)),
+    kind,
     startedAt: s.startedAt,
     endedAt,
     distanceM: Math.round(sum.distanceM),
     movingS,
     paceSecPerKm: pace,
-    kcal: runKcal(sum.distanceM, b?.weight ?? 70),
+    kcal: activityKcal(kind, sum.distanceM, b?.weight ?? 70, elev),
     splits: sum.splits,
-    route: simplify(s.points).map((p) => [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lng * 1e6) / 1e6, p.seg]),
+    route,
+    elev,
     timeline: bucketTimeline(s.speeds, 15),
     intervalPlan: s.plan,
     phases: phases ? phaseStats(phases, s.points).filter((p) => p.distanceM > 0 || p.kind === 'work') : undefined,
   });
+  const saved = useData.getState().runs[id];
+  if (saved) void enrichElevation(saved);
   return sum.distanceM;
 }
 

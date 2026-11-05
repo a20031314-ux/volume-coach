@@ -56,7 +56,7 @@ function Line({ name, main, sub, kcal }: { name: string; main: string; sub?: str
   const c = usePalette();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: Space.md, paddingVertical: 10, borderBottomWidth: 1, borderColor: c.line }}>
-      <T v="muted" style={{ width: 52 }}>{name}</T>
+      <T v="muted" style={{ width: 64 }}>{name}</T>
       <View style={{ flex: 1 }}>
         <T v="num" style={{ fontSize: 17 }}>{main}</T>
         {sub ? <T v="small">{sub}</T> : null}
@@ -71,10 +71,10 @@ export function ActivitySheet({ open, onClose }: { open: boolean; onClose: () =>
   const a = useDayActivity(date);
   const isToday = date === today();
   const steps = a.walk
-    ? <Line name="걷기" main={`${a.walk.steps.toLocaleString('ko-KR')}보`} sub={`${a.walk.km.toFixed(1)}km`} kcal={a.walk.kcal} />
+    ? <Line name="걸음" main={`${a.walk.steps.toLocaleString('ko-KR')}보`} sub={`${a.walk.km.toFixed(1)}km${a.outdoor.count ? ' (기록 제외)' : ''}`} kcal={a.walk.kcal} />
     : a.stepsState === 'denied'
-      ? <Line name="걷기" main="읽을 수 없음" sub={`${HEALTH_NAME}에서 권한을 확인하세요`} />
-      : a.stepsState === 'loading' ? <Line name="걷기" main="…" /> : null;
+      ? <Line name="걸음" main="읽을 수 없음" sub={`${HEALTH_NAME}에서 권한을 확인하세요`} />
+      : a.stepsState === 'loading' ? <Line name="걸음" main="…" /> : null;
 
   return (
     <Sheet open={open} title="하루 활동" onClose={() => { onClose(); setDate(today()); }}>
@@ -84,6 +84,9 @@ export function ActivitySheet({ open, onClose }: { open: boolean; onClose: () =>
         {steps}
         <Line name="웨이트" main={a.lift.sets ? `${a.lift.sets}세트` : '없음'} sub={a.lift.minutes ? `${a.lift.minutes}분` : undefined} kcal={a.lift.sets ? a.lift.kcal : undefined} />
         <Line name="러닝" main={a.run.count ? `${a.run.km.toFixed(1)}km` : '없음'} sub={a.run.count ? `${a.run.minutes}분` : undefined} kcal={a.run.count ? a.run.kcal : undefined} />
+        {a.outdoor.count ? (
+          <Line name="걷기·등산" main={`${a.outdoor.km.toFixed(1)}km`} sub={[`${a.outdoor.minutes}분`, a.outdoor.gainM ? `↑${a.outdoor.gainM}m` : null].filter(Boolean).join(' · ')} kcal={a.outdoor.kcal} />
+        ) : null}
       </View>
       <Row style={{ justifyContent: 'space-between' }}>
         <T v="title" style={{ fontSize: 15 }}>합계</T>

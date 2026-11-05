@@ -15,7 +15,7 @@ export default function TabLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: 'square.and.pencil', selected: 'square.and.pencil' }} md="edit_note" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="run">
-        <NativeTabs.Trigger.Label>러닝</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>유산소</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'figure.run', selected: 'figure.run' }} md="directions_run" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="food">

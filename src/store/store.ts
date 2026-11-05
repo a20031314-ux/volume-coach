@@ -40,8 +40,9 @@ export interface DataState {
   removeMeal: (id: string) => void;
   addBodyComp: (b: Omit<BodyComp, keyof SyncMeta>) => void;
   removeBodyComp: (id: string) => void;
-  addRun: (r: Omit<Run, keyof SyncMeta>) => void;
+  addRun: (r: Omit<Run, keyof SyncMeta>) => string;
   removeRun: (id: string) => void;
+  patchRun: (id: string, patch: Partial<Omit<Run, keyof SyncMeta>>) => void;
   updateSettings: (patch: Partial<Omit<Settings, 'updatedAt'>>) => void;
   /** merge records from the server; local wins when newer */
   mergeRemote: (rows: { kind: Kind; id: string; data: unknown; updated_at: number; deleted: boolean }[], cursor: string | null) => void;
@@ -131,6 +132,12 @@ export const useData = create<DataState>()(
       addRun: (r) => {
         const rec: Run = { ...r, id: newId(), updatedAt: Date.now() };
         set((s) => ({ runs: { ...s.runs, [rec.id]: rec }, dirty: addDirty(s.dirty, `run:${rec.id}`) }));
+        return rec.id;
+      },
+      patchRun: (id, patch) => {
+        const cur = get().runs[id];
+        if (!cur || cur.deleted) return;
+        set((s) => ({ runs: { ...s.runs, [id]: { ...cur, ...patch, updatedAt: Date.now() } }, dirty: addDirty(s.dirty, `run:${id}`) }));
       },
       removeRun: (id) => {
         const cur = get().runs[id];

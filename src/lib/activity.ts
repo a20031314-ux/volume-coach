@@ -6,9 +6,11 @@ export interface DaySteps { steps: number; meters: number }
 export interface DayActivity {
   lift: { sets: number; minutes: number; kcal: number };
   run: { km: number; minutes: number; kcal: number; count: number };
+  /** walks and hikes recorded with GPS */
+  outdoor: { km: number; minutes: number; kcal: number; count: number; gainM: number };
   /** null when steps aren't connected or not read yet */
   walk: { steps: number; km: number; kcal: number } | null;
-  /** minutes of deliberate exercise (lifting + running) */
+  /** minutes of deliberate exercise (lifting, running, recorded walks and hikes) */
   activeMin: number;
   kcal: number;
 }
@@ -21,8 +23,8 @@ const WALK_KCAL_PER_KG_KM = 0.5;
 
 /**
  * Sums one day's training. Health stores count running steps and distance too (the phone was
- * in your pocket), so runs recorded here are subtracted from the walking distance to avoid
- * counting them twice. Steps stay as the store reports them — that's the number people know.
+ * in your pocket), so runs, walks and hikes recorded here are subtracted from the walking
+ * distance to avoid counting them twice. Steps stay as the store reports them — that's the number people know.
  */
 export function dayActivity(
   date: string,
@@ -43,31 +45,39 @@ export function dayActivity(
   liftMin += logs.filter((l) => !l.sessionId || !loggedBySession.has(l.sessionId)).reduce((a, l) => a + l.sets * MIN_PER_SET, 0);
   liftMin = Math.round(liftMin);
 
-  const runM = runs.reduce((a, r) => a + r.distanceM, 0);
-  const runMin = Math.round(runs.reduce((a, r) => a + r.movingS, 0) / 60);
-  const runKcal = runs.reduce((a, r) => a + r.kcal, 0);
+  const sum = (rs: Run[]) => ({
+    m: rs.reduce((a, r) => a + r.distanceM, 0),
+    min: Math.round(rs.reduce((a, r) => a + r.movingS, 0) / 60),
+    kcal: rs.reduce((a, r) => a + r.kcal, 0),
+  });
+  const running = runs.filter((r) => (r.kind ?? 'run') === 'run');
+  const walks = runs.filter((r) => (r.kind ?? 'run') !== 'run');
+  const R = sum(running), O = sum(walks);
+  const trackedM = R.m + O.m;
 
   let walk: DayActivity['walk'] = null;
   if (data.steps) {
-    const km = Math.max(0, data.steps.meters - runM) / 1000;
+    const km = Math.max(0, data.steps.meters - trackedM) / 1000;
     walk = { steps: Math.round(data.steps.steps), km: Math.round(km * 10) / 10, kcal: Math.round(km * w * WALK_KCAL_PER_KG_KM) };
   }
 
   const liftKcal = Math.round(liftMin * w * LIFT_KCAL_PER_KG_MIN);
   return {
     lift: { sets, minutes: liftMin, kcal: liftKcal },
-    run: { km: Math.round(runM / 100) / 10, minutes: runMin, kcal: runKcal, count: runs.length },
+    run: { km: Math.round(R.m / 100) / 10, minutes: R.min, kcal: R.kcal, count: running.length },
+    outdoor: { km: Math.round(O.m / 100) / 10, minutes: O.min, kcal: O.kcal, count: walks.length, gainM: walks.reduce((a, r) => a + (r.elev?.gainM ?? 0), 0) },
     walk,
-    activeMin: liftMin + runMin,
-    kcal: liftKcal + runKcal + (walk?.kcal ?? 0),
+    activeMin: liftMin + R.min + O.min,
+    kcal: liftKcal + R.kcal + O.kcal + (walk?.kcal ?? 0),
   };
 }
 
-/** One-line summary for headers, e.g. "8,214보 · 웨이트 52분 · 러닝 5.0km". Empty when nothing happened. */
+/** One-line summary, e.g. "8,214보 · 웨이트 52분 · 러닝 5.0km". Empty when nothing happened. */
 export function activityLine(a: DayActivity): string {
   return [
     a.walk && a.walk.steps ? `${a.walk.steps.toLocaleString('ko-KR')}보` : null,
     a.lift.minutes ? `웨이트 ${a.lift.minutes}분` : null,
     a.run.count ? `러닝 ${a.run.km.toFixed(1)}km` : null,
+    a.outdoor.count ? `걷기·등산 ${a.outdoor.km.toFixed(1)}km` : null,
   ].filter(Boolean).join(' · ');
 }
