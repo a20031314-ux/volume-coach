@@ -28,7 +28,11 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.a20031314ux.volumecoach"
+      "package": "com.a20031314ux.volumecoach",
+      "permissions": [
+        "android.permission.health.READ_STEPS",
+        "android.permission.health.READ_DISTANCE"
+      ]
     },
     "web": {
       "output": "single",
@@ -54,7 +58,24 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-image"
+      "expo-image",
+      "react-native-health-connect",
+      [
+        "@kingstinct/react-native-healthkit",
+        {
+          "NSHealthShareUsageDescription": "하루 걸음 수와 걷기 거리를 운동량에 더해 보여주려면 건강 데이터 읽기 권한이 필요해요.",
+          "NSHealthUpdateUsageDescription": false,
+          "background": false
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,

@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
+import { ActivityRow } from '@/components/day-activity';
 import { Disclosure, Sheet } from '@/components/layout';
 import { LogSheet, type LogDraft } from '@/components/log-sheet';
 import { HintRow, PlanView, minutesFor, type PlanItem } from '@/components/plan-view';
@@ -124,6 +125,8 @@ export default function Today() {
         <HintRow text={hint.text} action={hint.action} onAction={hint.run}
           onDismiss={() => updateSettings({ dismissed: [...settings.dismissed, hint.key] })} />
       ) : null}
+
+      <ActivityRow />
 
       <Disclosure title="부위별 회복도">
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
