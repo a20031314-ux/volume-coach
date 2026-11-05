@@ -1,0 +1,40 @@
+# Builds installable test apps on EAS. Run it from the Actions tab when native code changed
+# (a new native package, app.json permissions, icons) — plain code changes ship via "Publish update".
+# The first build of each platform must be run once from a terminal so signing credentials are created
+# (npm run build:android / npm run build:ios); after that this workflow can build without prompts.
+name: Build test app
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform
+        type: choice
+        options: [android, ios, all]
+        default: android
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - run: npm ci
+
+      - name: Android (APK, internal)
+        if: inputs.platform == 'android' || inputs.platform == 'all'
+        run: eas build --platform android --profile preview --non-interactive --no-wait
+
+      - name: iOS (TestFlight)
+        if: inputs.platform == 'ios' || inputs.platform == 'all'
+        run: eas build --platform ios --profile ios-testflight --auto-submit --non-interactive --no-wait

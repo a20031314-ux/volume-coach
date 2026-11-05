@@ -46,6 +46,7 @@ export default function RootLayout() {
               <Stack.Screen name="prefs/body" options={{ headerShown: true, title: '신체 정보' }} />
               <Stack.Screen name="prefs/rules" options={{ headerShown: true, title: '운동 규칙' }} />
               <Stack.Screen name="prefs/workout" options={{ headerShown: true, title: '기록 방식' }} />
+              <Stack.Screen name="prefs/app" options={{ headerShown: true, title: '앱 정보' }} />
               <Stack.Screen name="prefs/account" options={{ headerShown: true, title: '계정' }} />
               <Stack.Screen name="account" options={{ presentation: 'modal', headerShown: true, title: '계정' }} />
             </Stack>

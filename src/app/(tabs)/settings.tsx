@@ -1,3 +1,4 @@
+import Constants from 'expo-constants';
 import { router } from 'expo-router';
 import { useMemo } from 'react';
 
@@ -45,6 +46,10 @@ export default function SettingsScreen() {
           ? <ListRow label="이 기기에만 저장 중" last />
           : <ListRow label={auth.session ? auth.email ?? '계정' : '로그인 / 회원가입'} value={auth.session ? (auth.syncing ? '동기화 중' : '동기화됨') : undefined}
               onPress={() => router.push(auth.session ? '/prefs/account' : '/account')} last />}
+      </Group>
+
+      <Group title="앱">
+        <ListRow label="앱 정보" value={Constants.expoConfig?.version} onPress={() => router.push('/prefs/app')} last />
       </Group>
 
       <T v="small">추천은 일반적인 운동·영양 가이드에 기반한 참고용이에요. 부상이나 질환이 있다면 전문가와 먼저 상의하세요.</T>

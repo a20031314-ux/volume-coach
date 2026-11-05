@@ -9,12 +9,15 @@
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.volumecoach.app",
+      "bundleIdentifier": "com.a20031314ux.volumecoach",
       "supportsTablet": false,
       "infoPlist": {
         "UIBackgroundModes": [
           "audio"
         ]
+      },
+      "config": {
+        "usesNonExemptEncryption": false
       }
     },
     "android": {
@@ -25,7 +28,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.volumecoach.app"
+      "package": "com.a20031314ux.volumecoach"
     },
     "web": {
       "output": "single",
@@ -56,6 +59,14 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }

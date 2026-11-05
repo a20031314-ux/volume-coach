@@ -1,0 +1,65 @@
+# Publishes an over-the-air update to installed test builds on every push to main.
+# Needs: repository secret EXPO_TOKEN, and an EAS project linked in app.json (npm run eas:init).
+name: Publish update
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'supabase/**'
+  workflow_dispatch:
+
+concurrency:
+  group: eas-update
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check setup
+        id: ready
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [ -z "$EXPO_TOKEN" ]; then
+            echo "EXPO_TOKEN secret is not set yet — skipping." >> "$GITHUB_STEP_SUMMARY"
+            echo "ok=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if ! node -e "process.exit(require('./app.json').expo?.extra?.eas?.projectId ? 0 : 1)"; then
+            echo "No EAS project in app.json yet (run npm run eas:init) — skipping." >> "$GITHUB_STEP_SUMMARY"
+            echo "ok=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "ok=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@v4
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: expo/expo-github-action@v8
+        if: steps.ready.outputs.ok == 'true'
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Install
+        if: steps.ready.outputs.ok == 'true'
+        run: npm ci
+
+      - name: Typecheck and test
+        if: steps.ready.outputs.ok == 'true'
+        run: |
+          npx tsc --noEmit
+          npx vitest run
+
+      - name: Publish update
+        if: steps.ready.outputs.ok == 'true'
+        env:
+          MESSAGE: ${{ github.event.head_commit.message || 'manual update' }}
+        run: |
+          eas update --channel main --environment preview --non-interactive --message "$(echo "$MESSAGE" | head -n 1)"

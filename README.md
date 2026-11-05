@@ -66,6 +66,10 @@ npx expo start
 - 앱을 다시 열 때마다 서버의 변경분을 받아옵니다. 같은 기록을 두 기기에서 고치면 **나중에 고친 쪽**이 남습니다.
 - 서버에는 테이블 하나(`records`)에 종류(`log`·`checkin`·`meal`·`body`·`settings`)별 JSON으로 저장합니다. 필드를 추가해도 마이그레이션이 필요 없어서 초기에 빠르게 바꾸기 좋습니다.
 
+## 내 폰에서 테스트 (설치형 앱 + 자동 업데이트)
+
+Android·iPhone에 설치해서 써보는 방법은 [docs/test-install.md](docs/test-install.md)를 보세요. 한 번 설치하면 `main`에 올라간 코드가 GitHub Actions로 자동 배포됩니다.
+
 ## 3. 스토어 출시 (EAS)
 
 준비물: Apple Developer Program(연 $99), Google Play Console(1회 $25), https://expo.dev 계정
@@ -80,7 +84,7 @@ npx eas-cli@latest submit --platform android
 ```
 
 - `.env` 값은 빌드 서버에 올라가지 않으니, EAS 대시보드 **Environment variables**에 같은 두 값을 등록하세요.
-- `app.json`의 `ios.bundleIdentifier` / `android.package`(현재 `com.volumecoach.app`)는 **한 번 출시하면 바꿀 수 없습니다.** 본인 도메인 기반 이름으로 먼저 바꾸세요.
+- `app.json`의 `ios.bundleIdentifier` / `android.package`(현재 `com.a20031314ux.volumecoach`)는 **한 번 출시하면 바꿀 수 없습니다.** 본인 도메인 기반 이름으로 먼저 바꾸세요.
 - 아이콘·스플래시(`assets/images`)는 아직 Expo 기본 이미지입니다.
 
 ### 출시 전 체크리스트
