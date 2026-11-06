@@ -1,4 +1,5 @@
 import type { ActivityKind, Elevation, RoutePoint } from './elevation';
+import type { Weather } from './weather';
 export type MuscleKey =
   | 'chest' | 'back' | 'shoulder' | 'quad' | 'ham' | 'bi' | 'tri' | 'calf' | 'abs';
 
@@ -73,6 +74,8 @@ export interface Run extends SyncMeta {
   route: RoutePoint[];
   /** climb, descent and grade; GPS-based at save time, replaced by terrain data when online */
   elev?: Elevation | null;
+  /** weather at the start, fetched right after saving; already folded into kcal */
+  weather?: Weather | null;
   /** speed over time as [moving second, m/s] */
   timeline?: [number, number][];
   intervalPlan?: IntervalPlanData | null;

@@ -24,6 +24,7 @@ import { body } from '@/lib/profile';
 import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/lib/elevation';
 import { acceptPoint, currentPace, haversine, simplify, summarize, type GpsPoint } from '@/lib/run';
 import { enrichElevation, gpsElevation } from '@/run/elevation-fetch';
+import { enrichWeather } from '@/run/weather-fetch';
 import { ensureNotifications } from '@/store/rest-timer';
 import { live, useData } from '@/store/store';
 
@@ -397,7 +398,10 @@ export async function finishRun(): Promise<number | null> {
     phases: phases ? phaseStats(phases, s.points).filter((p) => p.distanceM > 0 || p.kind === 'work') : undefined,
   });
   const saved = useData.getState().runs[id];
-  if (saved) void enrichElevation(saved);
+  if (saved) {
+    // weather first: it's only valid right after the run; elevation can be filled in later too
+    void enrichWeather(saved).finally(() => { const r = useData.getState().runs[id]; if (r) void enrichElevation(r); });
+  }
   return sum.distanceM;
 }
 

@@ -15,6 +15,7 @@ import { KIND_NAME, gradeAdjustedPace } from '@/lib/elevation';
 import { PHASE_NAME } from '@/lib/interval';
 import { RATE_NAME, fmtDuration, fmtKm, fmtRate, type RateUnit } from '@/lib/run';
 import { clock } from '@/lib/timeline';
+import { weatherFactor } from '@/lib/weather';
 import { enrichElevation } from '@/run/elevation-fetch';
 import { useData } from '@/store/store';
 
@@ -58,6 +59,12 @@ export default function RunDetail() {
             <T v="small">{r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m · ` : ''}{r.kcal}kcal</T>
           </View>
         </Row>
+        {r.weather ? (
+          <T v="small">
+            {`기온 ${Math.round(r.weather.tempC)}° · 체감 ${Math.round(r.weather.feelsC)}° · 습도 ${r.weather.humidity}% · 바람 ${r.weather.windKmh}km/h`}
+            {weatherFactor(r.weather) > 1 ? ` · 칼로리 +${Math.round((weatherFactor(r.weather) - 1) * 100)}% 반영` : ''}
+          </T>
+        ) : null}
       </Card>
 
       <Card>
