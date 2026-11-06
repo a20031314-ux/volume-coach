@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 
 import { ElevationChart } from '@/components/elevation-chart';
@@ -8,12 +8,13 @@ import { PaceTimeline } from '@/components/pace-timeline';
 import { RouteMap } from '@/components/route-map';
 import { TlNode } from '@/components/timeline';
 import { useToast } from '@/components/toast';
-import { Button, Card, ConfirmButton, Row, Segmented, T } from '@/components/ui';
+import { Button, Card, ConfirmButton, Pills, Row, Segmented, T } from '@/components/ui';
 import { usePalette } from '@/constants/theme';
 import { fmt } from '@/lib/dates';
 import { KIND_NAME, gradeAdjustedPace } from '@/lib/elevation';
 import { PHASE_NAME } from '@/lib/interval';
 import { RATE_NAME, fmtDuration, fmtKm, fmtRate, type RateUnit } from '@/lib/run';
+import { presetRanges, rangeStats, type Range } from '@/lib/range';
 import { clock } from '@/lib/timeline';
 import { weatherFactor } from '@/lib/weather';
 import { enrichElevation } from '@/run/elevation-fetch';
@@ -26,6 +27,7 @@ export default function RunDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const r = useData((s) => (id ? s.runs[id] : undefined));
   const removeRun = useData((s) => s.removeRun);
+  const [range, setRange] = useState<Range | null>(null);
   const runOpts = useData((s) => s.settings.run);
   const update = useData((s) => s.updateSettings);
   const unit: RateUnit = runOpts.unit ?? 'pace';
@@ -43,6 +45,8 @@ export default function RunDetail() {
   }, [id]);
 
   if (!r || r.deleted) return <Page><T v="muted">기록을 찾을 수 없어요.</T></Page>;
+  const presets = presetRanges(r);
+  const sel = range && r.timeline ? rangeStats(r.timeline, range) : null;
   const kind = r.kind ?? 'run';
   const phases = r.phases ?? [];
   const works = phases.filter((p) => p.kind === 'work');
@@ -72,7 +76,19 @@ export default function RunDetail() {
         {r.timeline?.length ? (
           <TlNode title={`시간대별 ${RATE_NAME[unit]}`} sub={phases.length ? '색칠된 곳이 달리기 구간 · 점선은 평균' : '점선은 평균'} color={c.warn}>
             <Segmented options={[{ v: 'pace', n: '페이스 (분/km)' }, { v: 'speed', n: '속도 (km/h)' }]} value={unit} onChange={(v) => v && setUnit(v)} />
-            <PaceTimeline run={r} unit={unit} />
+            <PaceTimeline run={r} unit={unit} range={range} onSelect={setRange} />
+            <Pills options={[{ k: 'all', n: '전체' }, ...presets.map((p) => ({ k: p.key, n: p.label }))]}
+              value={range ? presets.find((p) => p.range[0] === range[0] && p.range[1] === range[1])?.key ?? 'custom' : 'all'}
+              onToggle={(k) => setRange(k === 'all' ? null : presets.find((p) => p.key === k)?.range ?? null)} />
+            {range && sel ? (
+              <View style={{ backgroundColor: c.accentSoft, borderRadius: 8, padding: 10, gap: 2 }}>
+                <Row style={{ justifyContent: 'space-between' }}>
+                  <T v="small">{fmtDuration(range[0])}–{fmtDuration(range[1])} · {fmtDuration(sel.durS)}</T>
+                  <T v="small">최고 {rate(sel.maxV ? 1000 / sel.maxV : null)}</T>
+                </Row>
+                <T v="num" style={{ fontSize: 18 }}>{sel.distanceM.toLocaleString('ko-KR')}m · {rate(sel.paceS)}</T>
+              </View>
+            ) : <T v="small">그래프를 옆으로 드래그하면 그 구간만 크게 봐요</T>}
           </TlNode>
         ) : null}
         {phases.map((p, i) => (

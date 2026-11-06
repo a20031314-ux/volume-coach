@@ -393,7 +393,8 @@ export async function finishRun(): Promise<number | null> {
     splits: sum.splits,
     route,
     elev,
-    timeline: bucketTimeline(s.speeds, 15),
+    // 5 s detail so a stretch can be zoomed into later
+    timeline: bucketTimeline(s.speeds, 5),
     intervalPlan: s.plan,
     phases: phases ? phaseStats(phases, s.points).filter((p) => p.distanceM > 0 || p.kind === 'work') : undefined,
   });
