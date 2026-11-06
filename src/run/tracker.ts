@@ -247,27 +247,54 @@ async function startUpdates() {
   });
 }
 
-export async function startRun(setup: RunSetup): Promise<StartResult> {
+/**
+ * Checks GPS and asks for location permission. Asking is kept apart from starting so that
+ * answering the permission prompt never starts a run by itself — the user taps start again.
+ * `asked` is true when a permission prompt was shown during this call.
+ */
+export async function prepareRun(): Promise<StartResult & { asked?: boolean }> {
   if (!(await isTrackingAvailable())) {
-    return { ok: false, message: '이 기기에서는 러닝 기록을 쓸 수 없어요. 앱으로 설치한 버전에서 사용해 주세요.' };
+    return { ok: false, message: '이 기기에서는 GPS 기록을 쓸 수 없어요. 앱으로 설치한 버전에서 사용해 주세요.' };
   }
   if (!(await Location.hasServicesEnabledAsync())) {
     return { ok: false, message: '휴대폰의 위치 서비스가 꺼져 있어요. 설정에서 켜 주세요.', openSettings: true };
   }
-  const fg = await Location.requestForegroundPermissionsAsync();
+  let asked = false;
+  let fg = await Location.getForegroundPermissionsAsync();
   if (fg.status !== 'granted') {
-    return { ok: false, message: '거리를 재려면 위치 권한이 필요해요. 설정에서 위치를 허용해 주세요.', openSettings: !fg.canAskAgain };
+    if (!fg.canAskAgain) return { ok: false, message: '거리를 재려면 위치 권한이 필요해요. 설정에서 위치를 허용해 주세요.', openSettings: true };
+    asked = true;
+    fg = await Location.requestForegroundPermissionsAsync();
+    if (fg.status !== 'granted') {
+      return { ok: false, message: '거리를 재려면 위치 권한이 필요해요. 설정에서 위치를 허용해 주세요.', openSettings: !fg.canAskAgain };
+    }
   }
-  const bg = await Location.requestBackgroundPermissionsAsync();
+  let bg = await Location.getBackgroundPermissionsAsync();
   if (bg.status !== 'granted') {
-    return {
-      ok: false,
-      message: Platform.OS === 'ios'
-        ? '화면을 꺼도 기록하려면 위치 권한을 "항상"으로 바꿔 주세요.'
-        : '화면을 꺼도 기록하려면 위치 권한을 "항상 허용"으로 바꿔 주세요.',
-      openSettings: true,
-    };
+    asked = true;
+    bg = await Location.requestBackgroundPermissionsAsync();
+    if (bg.status !== 'granted') {
+      return {
+        ok: false,
+        message: Platform.OS === 'ios'
+          ? '화면을 꺼도 기록하려면 위치 권한을 "항상"으로 바꿔 주세요.'
+          : '화면을 꺼도 기록하려면 위치 권한을 "항상 허용"으로 바꿔 주세요.',
+        openSettings: true,
+      };
+    }
   }
+  return { ok: true, asked };
+}
+
+/** Speaks one countdown number (no-op when voice is off). */
+export function sayCount(n: number) {
+  speak([String(n)]);
+}
+
+/** Starts recording right away. Call prepareRun first; this only re-checks permission. */
+export async function startRun(setup: RunSetup): Promise<StartResult> {
+  const fg = await Location.getForegroundPermissionsAsync();
+  if (fg.status !== 'granted') return { ok: false, message: '거리를 재려면 위치 권한이 필요해요.', openSettings: true };
   useRun.setState({ ...idle, ...setup, status: 'running', startedAt: Date.now() });
   try {
     await startUpdates();

@@ -18,7 +18,7 @@ import { fmtDuration, fmtKm, fmtPace } from '@/lib/run';
 import type { IntervalPlanData, RunOptions } from '@/lib/types';
 import {
   discardRun, elapsedS, finishRun, isTrackingAvailable, livePace, openSettings, pauseRun, phasesOf, reconcileRun,
-  resumeRun, startRun, tickCues, useRun, type StartResult,
+  prepareRun, resumeRun, sayCount, startRun, tickCues, useRun, type StartResult,
 } from '@/run/tracker';
 import { enrichElevation } from '@/run/elevation-fetch';
 import { live, useData } from '@/store/store';
@@ -44,6 +44,9 @@ export default function RunScreen() {
   const [problem, setProblem] = useState<Extract<StartResult, { ok: false }> | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  /** seconds left before recording starts; null when not counting */
+  const [count, setCount] = useState<number | null>(null);
+  const [granted, setGranted] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [voiceSheet, setVoiceSheet] = useState(false);
@@ -83,13 +86,36 @@ export default function RunScreen() {
   };
   const kind: ActivityKind = opts.kind ?? 'run';
   const interval = kind === 'run' && opts.mode === 'interval';
-  const start = () => act(() => startRun({
+  const begin = () => act(() => startRun({
     kind,
     plan: interval ? opts.interval : null,
     voice: opts.voice,
     kmAlert: interval ? false : opts.kmAlert,
     everyMin: interval ? 0 : opts.everyMin,
   }));
+  const countdown = opts.countdown ?? 3;
+  const start = async () => {
+    setBusy(true); setProblem(null); setGranted(false);
+    let r: Awaited<ReturnType<typeof prepareRun>>;
+    try { r = await prepareRun(); } finally { setBusy(false); }
+    if (!r.ok) { setProblem(r); return; }
+    // permission was just granted: stop here so the run starts only when the user is ready
+    if (r.asked) { setGranted(true); return; }
+    if (countdown > 0) { setCount(countdown); if (opts.voice) sayCount(countdown); }
+    else void begin();
+  };
+  useEffect(() => {
+    if (count == null) return;
+    const t = setTimeout(() => {
+      const n = count - 1;
+      if (n <= 0) { setCount(null); void begin(); return; }
+      if (opts.voice) sayCount(n);
+      setCount(n);
+    }, 1000);
+    return () => clearTimeout(t);
+    // begin is recreated every render; the countdown only depends on the number
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count]);
   const liveRoute = useMemo<RoutePoint[]>(() => run.points.map((p) => [p.lat, p.lng, p.seg]), [run.points]);
   useEffect(() => {
     const r = open ? useData.getState().runs[open] : undefined;
@@ -123,7 +149,18 @@ export default function RunScreen() {
               </View>
             </View>
           ) : null}
-          <Button label={busy ? '준비 중…' : interval ? '인터벌 시작' : `${KIND_NAME[kind]} 시작`} kind="primary" disabled={busy} onPress={() => void start()} style={{ paddingVertical: 16 }} />
+          {count != null ? (
+            <View style={{ alignItems: 'center', gap: Space.md, paddingVertical: Space.md }}>
+              <T v="big" style={{ fontSize: 72, lineHeight: 80, color: c.accent }}>{count}</T>
+              <Row gap={Space.md}>
+                <Button label="취소" onPress={() => setCount(null)} style={{ minWidth: 110 }} />
+                <Button label="바로 시작" kind="primary" onPress={() => { setCount(null); void begin(); }} style={{ minWidth: 110 }} />
+              </Row>
+            </View>
+          ) : (
+            <Button label={busy ? '준비 중…' : interval ? '인터벌 시작' : `${KIND_NAME[kind]} 시작`} kind="primary" disabled={busy} onPress={() => void start()} style={{ paddingVertical: 16 }} />
+          )}
+          {granted && count == null ? <T v="small" style={{ textAlign: 'center' }}>위치 허용 완료. 준비되면 시작을 누르세요.</T> : null}
           <Row style={{ justifyContent: 'space-between' }}>
             <T v="small">음성 안내 {opts.voice ? (interval ? '켜짐' : [opts.kmAlert ? '1km마다' : null, opts.everyMin ? `${opts.everyMin}분마다` : null].filter(Boolean).join(' · ') || '켜짐') : '꺼짐'}</T>
             <Button label="옵션" kind="ghost" onPress={() => setVoiceSheet(true)} />
@@ -156,7 +193,11 @@ export default function RunScreen() {
         </Row>
       </Sheet>
 
-      <Sheet open={voiceSheet} title="음성 안내" onClose={() => setVoiceSheet(false)}>
+      <Sheet open={voiceSheet} title="시작 옵션" onClose={() => setVoiceSheet(false)}>
+        <T v="muted">카운트다운</T>
+        <Segmented options={[{ v: '0', n: '없음' }, { v: '3', n: '3초' }, { v: '5', n: '5초' }, { v: '10', n: '10초' }]} value={String(countdown)}
+          onChange={(v) => v && setOpts({ countdown: Number(v) })} />
+        <T v="muted">음성 안내</T>
         <Segmented options={[{ v: 'on', n: '켜기' }, { v: 'off', n: '끄기' }]} value={opts.voice ? 'on' : 'off'} onChange={(v) => v && setOpts({ voice: v === 'on' })} />
         {opts.voice && !interval ? (
           <Pills options={[{ k: 'km', n: '1km마다' }, { k: '5', n: '5분마다' }, { k: '10', n: '10분마다' }]}

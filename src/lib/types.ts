@@ -91,6 +91,8 @@ export interface RunOptions {
   /** announce every N minutes (0 = off) */
   everyMin: number;
   mode: 'free' | 'interval';
+  /** seconds counted down before recording starts (0 = start immediately) */
+  countdown?: number;
   /** what to record; interval mode applies to running only */
   kind?: ActivityKind;
   /** last used interval plan */
