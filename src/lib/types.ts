@@ -31,6 +31,8 @@ export interface Checkin extends SyncMeta {
   sleep?: 0 | 1 | 2 | null;
   energy?: 0 | 1 | 2 | null;
   sore: MuscleKey[];
+  /** the day's one-line review note */
+  note?: string;
 }
 
 export interface Meal extends SyncMeta {

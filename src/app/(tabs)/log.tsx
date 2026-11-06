@@ -5,6 +5,7 @@ import { useNow } from '@/hooks/use-now';
 import { Platform, View } from 'react-native';
 
 import { useDayActivity } from '@/components/day-activity';
+import { DayReview } from '@/components/day-review';
 import { Sheet } from '@/components/layout';
 import { NowSpeed } from '@/components/now-speed';
 import { StepsChart } from '@/components/steps-chart';
@@ -30,7 +31,7 @@ import { live, useData } from '@/store/store';
 export default function Log() {
   const c = usePalette();
   const params = useLocalSearchParams<{ muscle?: string }>();
-  const [view, setView] = useState<'day' | 'week'>('day');
+  const [view, setView] = useState<'day' | 'review' | 'week'>('day');
   const [date, setDate] = useState(today());
   const [adding, setAdding] = useState<MuscleKey | null>(null);
 
@@ -77,8 +78,12 @@ export default function Log() {
 
   return (
     <Screen title="기록">
-      <Segmented options={[{ v: 'day', n: '타임라인' }, { v: 'week', n: '주간 볼륨' }]} value={view} onChange={(v) => v && setView(v)} />
-      {view === 'week' ? <WeekView /> : (<>
+      <Segmented options={[{ v: 'day', n: '타임라인' }, { v: 'review', n: '하루 회고' }, { v: 'week', n: '주간 볼륨' }]} value={view} onChange={(v) => v && setView(v)} />
+      {view === 'week' ? <WeekView /> : view === 'review' ? (<>
+        <DayNav date={date} label={date === today() ? `오늘 · ${fmt(date)}` : fmt(date)}
+          onPrev={() => setDate(addDays(date, -1))} onNext={() => { if (date !== today()) setDate(addDays(date, 1)); }} />
+        <DayReview date={date} />
+      </>) : (<>
         <DayNav date={date} label={isToday ? `오늘 · ${fmt(date)}` : fmt(date)}
           onPrev={() => setDate(addDays(date, -1))} onNext={() => { if (!isToday) setDate(addDays(date, 1)); }} />
 
