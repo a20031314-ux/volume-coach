@@ -1,8 +1,7 @@
 import { View } from 'react-native';
 
 import { Page } from '@/components/layout';
-import { Card, NumField, Pills, Row, Segmented, T } from '@/components/ui';
-import { Space } from '@/constants/theme';
+import { Card, Pills, Segmented, T } from '@/components/ui';
 import { useData } from '@/store/store';
 
 export default function WorkoutPrefs() {
