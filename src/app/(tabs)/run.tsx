@@ -1,8 +1,10 @@
-import { router } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { router, useFocusEffect } from 'expo-router';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Platform, View } from 'react-native';
 
 import { Disclosure, Sheet } from '@/components/layout';
+import { LiveSpeedChart } from '@/components/live-speed';
 import { RouteMap } from '@/components/route-map';
 import { TlNode } from '@/components/timeline';
 import { useToast } from '@/components/toast';
@@ -11,13 +13,14 @@ import { Radius, Space, usePalette } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { fmt } from '@/lib/dates';
 import { PHASE_NAME, buildPhases, phaseAt, planTotalS, type PhaseKind } from '@/lib/interval';
+import { paceStatus, targetBand } from '@/lib/live';
 import { body } from '@/lib/profile';
 import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/lib/elevation';
 import { RATE_NAME, fmtDuration, fmtKm, fmtPace, fmtRate } from '@/lib/run';
 import type { IntervalPlanData, RunOptions } from '@/lib/types';
 import {
   discardRun, elapsedS, finishRun, isTrackingAvailable, livePace, openSettings, pauseRun, phasesOf, reconcileRun,
-  prepareRun, resumeRun, sayCount, startRun, tickCues, useRun, type StartResult,
+  prepareRun, resumeRun, targetNow, sayCount, startRun, tickCues, useRun, type StartResult,
 } from '@/run/tracker';
 import { live, useData } from '@/store/store';
 
@@ -41,6 +44,8 @@ export default function RunScreen() {
   const [problem, setProblem] = useState<Extract<StartResult, { ok: false }> | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
+  const [focused, setFocused] = useState(true);
+  useFocusEffect(useCallback(() => { setFocused(true); return () => setFocused(false); }, []));
   /** seconds left before recording starts; null when not counting */
   const [count, setCount] = useState<number | null>(null);
   const [granted, setGranted] = useState(false);
@@ -70,6 +75,16 @@ export default function RunScreen() {
   const secs = elapsedS(run, now);
   const avg = run.distanceM >= 50 ? secs / (run.distanceM / 1000) : null;
   const curPace = livePace(run, now);
+  const liveWindow = opts.liveWindowS ?? 60;
+  const liveTarget = run.status !== 'idle' ? targetNow(run, secs) : null;
+  const liveStatus = paceStatus(curPace ? 1000 / curPace : null, liveTarget ? targetBand(liveTarget) : null);
+  const liveColor = liveStatus === 'slow' ? c.bad : liveStatus === 'fast' ? c.warn : liveStatus === 'ok' ? c.ok : c.ink;
+  const keepAwake = run.status === 'running' && (opts.keepAwake ?? true) && focused;
+  useEffect(() => {
+    if (!keepAwake || Platform.OS === 'web') return;
+    void activateKeepAwakeAsync('run');
+    return () => { void deactivateKeepAwake('run'); };
+  }, [keepAwake]);
   const gpsAge = run.lastFixAt ? (now - run.lastFixAt) / 1000 : null;
   const gpsWeak = run.status === 'running' && (gpsAge == null || gpsAge > 15 || (run.lastAccuracy ?? 0) > 35);
   const phases = phasesOf(run);
@@ -89,6 +104,8 @@ export default function RunScreen() {
     kmAlert: interval ? false : opts.kmAlert,
     everyMin: interval ? 0 : opts.everyMin,
     unit: opts.unit ?? 'pace',
+    targetPaceS: interval ? null : opts.targetPaceS ?? null,
+    paceAlert: opts.paceAlert ?? true,
   }));
   const countdown = opts.countdown ?? 3;
   const start = async () => {
@@ -187,6 +204,18 @@ export default function RunScreen() {
       </Sheet>
 
       <Sheet open={voiceSheet} title="시작 옵션" onClose={() => setVoiceSheet(false)}>
+        {!interval ? (
+          <>
+            <T v="muted">목표 페이스</T>
+            <Stepper label="분/km" value={opts.targetPaceS ?? 0} step={5} min={0} max={900}
+              format={(v) => (v ? fmtPace(v) : '없음')}
+              onChange={(v) => setOpts({ targetPaceS: v ? (opts.targetPaceS ? v : 330) : null })} />
+          </>
+        ) : null}
+        <Segmented options={[{ v: 'on', n: '목표 벗어나면 알림' }, { v: 'off', n: '알림 끔' }]} value={opts.paceAlert ?? true ? 'on' : 'off'}
+          onChange={(v) => v && setOpts({ paceAlert: v === 'on' })} />
+        <Segmented options={[{ v: 'on', n: '기록 중 화면 켜두기' }, { v: 'off', n: '자동 꺼짐' }]} value={opts.keepAwake ?? true ? 'on' : 'off'}
+          onChange={(v) => v && setOpts({ keepAwake: v === 'on' })} />
         <T v="muted">표시 단위</T>
         <Segmented options={[{ v: 'pace', n: '페이스 (분/km)' }, { v: 'speed', n: '속도 (km/h)' }]} value={opts.unit ?? 'pace'}
           onChange={(v) => v && setOpts({ unit: v })} />
@@ -220,6 +249,21 @@ export default function RunScreen() {
         </View>
       ) : null}
 
+      {run.status === 'running' ? (
+        <Card style={{ gap: Space.sm }}>
+          <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+            <View>
+              <T v="num" style={{ fontSize: 40, lineHeight: 46, color: liveColor }}>{fmtRate(curPace, opts.unit)}</T>
+              <T v="small">{liveStatus === 'slow' ? '목표보다 느려요' : liveStatus === 'fast' ? '목표보다 빨라요' : liveStatus === 'ok' ? '목표 페이스' : `현재 ${RATE_NAME[opts.unit ?? 'pace']}`}
+                {liveTarget ? ` · 목표 ${fmtRate(liveTarget, opts.unit)}` : ''}</T>
+            </View>
+            <Segmented options={[{ v: '60', n: '1분' }, { v: '180', n: '3분' }, { v: '300', n: '5분' }]} value={String(liveWindow)}
+              onChange={(v) => v && setOpts({ liveWindowS: Number(v) })} />
+          </Row>
+          <LiveSpeedChart samples={run.speeds} nowS={secs} windowS={liveWindow} targetPaceS={liveTarget} unit={opts.unit ?? 'pace'} />
+        </Card>
+      ) : null}
+
       {run.status !== 'idle' ? (
       <Card style={{ gap: Space.lg }}>
         <View style={{ alignItems: 'center', gap: 2 }}>
@@ -229,7 +273,7 @@ export default function RunScreen() {
         <Row style={{ justifyContent: 'space-around' }}>
           <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtDuration(secs)}</T><T v="small">시간</T></View>
           <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtRate(avg, opts.unit)}</T><T v="small">평균 {RATE_NAME[opts.unit ?? 'pace']}</T></View>
-          <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtRate(curPace, opts.unit)}</T><T v="small">현재 {RATE_NAME[opts.unit ?? 'pace']}</T></View>
+          {run.status !== 'running' ? <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtRate(curPace, opts.unit)}</T><T v="small">현재 {RATE_NAME[opts.unit ?? 'pace']}</T></View> : null}
           <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{activityKcal(run.kind ?? 'run', run.distanceM, weight)}</T><T v="small">kcal</T></View>
         </Row>
         {run.status === 'paused' ? <T v="muted" style={{ textAlign: 'center' }}>일시정지 중 · 이 동안의 거리와 시간은 빼고 계산해요</T> : null}

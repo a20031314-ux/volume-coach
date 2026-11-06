@@ -109,8 +109,11 @@ export interface CueState {
   warned: boolean;
   km: number;
   minuteMark: number;
+  /** moving second of the last off-pace nudge, and since when pace has been off */
+  nudgeAt?: number;
+  offSince?: number | null;
 }
-export const initialCues: CueState = { phaseIdx: -1, half: false, warned: false, km: 0, minuteMark: 0 };
+export const initialCues: CueState = { phaseIdx: -1, half: false, warned: false, km: 0, minuteMark: 0, nudgeAt: -999, offSince: null };
 
 export interface CueInput {
   phases: Phase[] | null;
@@ -127,6 +130,12 @@ export interface CueInput {
   everyMin: number;
   /** speak pace (default) or speed */
   unit?: 'pace' | 'speed';
+  /** target pace that applies right now (interval work phase or free-run target) */
+  targetNowS?: number | null;
+  /** pace over the last ~20 s, steadier than paceNowS */
+  steadyPaceS?: number | null;
+  /** nudge when off target */
+  paceAlert?: boolean;
 }
 
 /** Korean spoken pace, e.g. "5분 10초". */
@@ -208,5 +217,17 @@ export function dueCues(st: CueState, x: CueInput): { say: string[]; next: CueSt
       say.push(`${mark * x.everyMin}분. ${spokenKm(x.distanceM)}, 현재 ${spokenRate(x.paceNowS, x.unit)}`);
     }
   }
+  // off target for 20 s → a short nudge, at most once a minute
+  if (x.paceAlert && x.targetNowS && x.steadyPaceS) {
+    const diff = x.steadyPaceS - x.targetNowS;
+    if (Math.abs(diff) > 15) {
+      next.offSince = st.offSince ?? x.movingS;
+      if (x.movingS - next.offSince >= 20 && x.movingS - (st.nudgeAt ?? -999) >= 60) {
+        next.nudgeAt = x.movingS;
+        next.offSince = null;
+        say.push(`${diff > 0 ? '조금 느려요' : '조금 빨라요'}. 목표 ${spokenValue(x.targetNowS, x.unit)}, 지금 ${spokenValue(x.steadyPaceS, x.unit)}`);
+      }
+    } else next.offSince = null;
+  } else if (st.offSince != null) next.offSince = null;
   return { say, next };
 }

@@ -91,6 +91,14 @@ export interface RunOptions {
   /** announce every N minutes (0 = off) */
   everyMin: number;
   mode: 'free' | 'interval';
+  /** free-run target pace, sec/km (null = none) */
+  targetPaceS?: number | null;
+  /** voice nudge when off target */
+  paceAlert?: boolean;
+  /** seconds shown in the live speed chart */
+  liveWindowS?: number;
+  /** keep the screen on while the run screen is open and recording */
+  keepAwake?: boolean;
   /** show pace (min/km, default) or speed (km/h) */
   unit?: 'pace' | 'speed';
   /** seconds counted down before recording starts (0 = start immediately) */

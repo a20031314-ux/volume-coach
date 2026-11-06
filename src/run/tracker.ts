@@ -17,7 +17,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 
 import { iso } from '@/lib/dates';
 import {
-  PHASE_NAME, bucketTimeline, buildPhases, dopplerSpeed, dueCues, initialCues, paceFromSpeed, phaseStats, smoothSpeed,
+  PHASE_NAME, bucketTimeline, buildPhases, phaseAt, dopplerSpeed, dueCues, initialCues, paceFromSpeed, phaseStats, smoothSpeed,
   spokenPace, spokenRate, type CueState, type IntervalPlan, type Phase, type SpeedSample,
 } from '@/lib/interval';
 import { body } from '@/lib/profile';
@@ -38,6 +38,10 @@ export interface RunSetup {
   kmAlert: boolean;
   everyMin: number;
   unit?: 'pace' | 'speed';
+  /** free-run target pace, sec/km */
+  targetPaceS?: number | null;
+  /** speak when off target */
+  paceAlert?: boolean;
 }
 
 interface ActiveRun extends RunSetup {
@@ -158,6 +162,16 @@ function speak(lines: string[]) {
   }
 }
 
+/** Target pace that applies now: the work phase's target in intervals, else the free-run target. */
+export function targetNow(s: ActiveRun, movingS: number): number | null {
+  const phases = phasesOf(s);
+  if (phases) {
+    const p = phaseAt(phases, movingS).phase;
+    return p?.kind === 'work' ? s.plan?.targetPaceS ?? null : null;
+  }
+  return s.targetPaceS ?? null;
+}
+
 /** Speak whatever cue is due. Safe to call repeatedly (each fix and each UI tick). */
 export function tickCues(now = Date.now()) {
   const s = useRun.getState();
@@ -167,6 +181,9 @@ export function tickCues(now = Date.now()) {
   const crossedKm = Math.floor(s.distanceM / 1000) > s.cues.km;
   const splits = crossedKm ? summarize(s.points).splits : [];
   const { say, next } = dueCues(s.cues, {
+    targetNowS: targetNow(s, movingS),
+    steadyPaceS: paceFromSpeed(smoothSpeed(s.speeds, movingS, 20)),
+    paceAlert: s.paceAlert ?? true,
     phases, plan: s.plan, movingS, distanceM: s.distanceM,
     paceNowS: livePace(s, now),
     avgPaceS: s.distanceM >= 50 ? movingS / (s.distanceM / 1000) : null,
