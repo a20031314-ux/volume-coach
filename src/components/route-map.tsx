@@ -12,8 +12,12 @@ export interface RouteMapProps {
   interactive?: boolean;
   /** show the phone's position and follow it (during a run) */
   follow?: boolean;
+  /** highlighted spot, [lat, lng] */
+  marker?: [number, number] | null;
+  /** tap on the map → index of the nearest route point */
+  onPick?: (index: number) => void;
 }
 
-export function RouteMap({ route, height = 200 }: RouteMapProps) {
-  return <RouteView route={route.map((p) => [p[0], p[1], p[2]] as [number, number, number])} height={height === 'fill' ? 420 : height} />;
+export function RouteMap({ route, height = 200, marker, onPick }: RouteMapProps) {
+  return <RouteView route={route.map((p) => [p[0], p[1], p[2]] as [number, number, number])} height={height === 'fill' ? 420 : height} marker={marker} onPick={onPick} />;
 }

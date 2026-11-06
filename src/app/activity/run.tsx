@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { ElevationChart } from '@/components/elevation-chart';
@@ -15,6 +15,7 @@ import { KIND_NAME, gradeAdjustedPace } from '@/lib/elevation';
 import { PHASE_NAME } from '@/lib/interval';
 import { RATE_NAME, fmtDuration, fmtKm, fmtRate, type RateUnit } from '@/lib/run';
 import { presetRanges, rangeStats, type Range } from '@/lib/range';
+import { momentAt, routeTimes } from '@/lib/scrub';
 import { clock } from '@/lib/timeline';
 import { weatherFactor } from '@/lib/weather';
 import { enrichElevation } from '@/run/elevation-fetch';
@@ -28,6 +29,9 @@ export default function RunDetail() {
   const r = useData((s) => (id ? s.runs[id] : undefined));
   const removeRun = useData((s) => s.removeRun);
   const [range, setRange] = useState<Range | null>(null);
+  const [cursor, setCursor] = useState<number | null>(null);
+  const times = useMemo(() => (r ? routeTimes(r) : []), [r]);
+  const moment = r && cursor != null && times.length ? momentAt(r, times, cursor) : null;
   const runOpts = useData((s) => s.settings.run);
   const update = useData((s) => s.updateSettings);
   const unit: RateUnit = runOpts.unit ?? 'pace';
@@ -71,12 +75,35 @@ export default function RunDetail() {
         ) : null}
       </Card>
 
+      {r.route.length > 1 ? (
+        <View style={{ gap: 6 }}>
+          <RouteMap route={r.route} grades={r.elev?.pointGrade} height={240} interactive
+            marker={moment ? [r.route[moment.index][0], r.route[moment.index][1]] : null}
+            onPick={(i) => { const t = times[i]; setCursor(t); if (range && (t < range[0] || t > range[1])) setRange(null); }} />
+          {moment ? (
+            <Row style={{ justifyContent: 'space-between', backgroundColor: c.surface, borderWidth: 1, borderColor: c.line, borderRadius: 8, padding: 10, flexWrap: 'nowrap' }}>
+              <View style={{ flexShrink: 1 }}>
+                <T v="num" style={{ fontSize: 17 }}>{fmtDuration(moment.t)} · {(moment.distanceM / 1000).toFixed(2)}km</T>
+                <T v="small">{[rate(moment.speed ? 1000 / moment.speed : null), moment.altM != null ? `고도 ${moment.altM}m` : null,
+                  moment.gradePct != null && Math.abs(moment.gradePct) >= 1 ? `경사 ${moment.gradePct > 0 ? '+' : ''}${moment.gradePct}%` : null].filter(Boolean).join(' · ')}</T>
+              </View>
+              <Button label="✕" kind="ghost" onPress={() => setCursor(null)} />
+            </Row>
+          ) : (
+            <Row style={{ justifyContent: 'space-between' }}>
+              <T v="small">지도나 그래프를 누르면 그 지점을 서로 짚어줘요</T>
+              <Button label="크게 보기" kind="ghost" onPress={() => router.push({ pathname: '/run-map', params: { id: r.id } })} />
+            </Row>
+          )}
+        </View>
+      ) : null}
+
       <Card>
         <TlNode time={clock(r.startedAt)} title="시작" small />
         {r.timeline?.length ? (
           <TlNode title={`시간대별 ${RATE_NAME[unit]}`} sub={phases.length ? '색칠된 곳이 달리기 구간 · 점선은 평균' : '점선은 평균'} color={c.warn}>
             <Segmented options={[{ v: 'pace', n: '페이스 (분/km)' }, { v: 'speed', n: '속도 (km/h)' }]} value={unit} onChange={(v) => v && setUnit(v)} />
-            <PaceTimeline run={r} unit={unit} range={range} onSelect={setRange} />
+            <PaceTimeline run={r} unit={unit} range={range} onSelect={setRange} cursor={cursor} onCursor={setCursor} />
             <Pills options={[{ k: 'all', n: '전체' }, ...presets.map((p) => ({ k: p.key, n: p.label }))]}
               value={range ? presets.find((p) => p.range[0] === range[0] && p.range[1] === range[1])?.key ?? 'custom' : 'all'}
               onToggle={(k) => setRange(k === 'all' ? null : presets.find((p) => p.key === k)?.range ?? null)} />
@@ -114,12 +141,6 @@ export default function RunDetail() {
         </Disclosure>
       ) : null}
 
-      {r.route.length > 1 ? (
-        <View style={{ gap: 4 }}>
-          <RouteMap route={r.route} grades={r.elev?.pointGrade} height={240} />
-          <Button label="지도 크게 보기" kind="ghost" onPress={() => router.push({ pathname: '/run-map', params: { id: r.id } })} style={{ alignSelf: 'flex-start' }} />
-        </View>
-      ) : null}
 
       {r.elev ? (
         <Card style={{ gap: 4 }}>

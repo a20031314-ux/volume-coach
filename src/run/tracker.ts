@@ -375,7 +375,9 @@ export async function finishRun(): Promise<number | null> {
   const data = useData.getState();
   const b = body(data.settings.profile, live(data.bodyComps));
   const kind = s.kind ?? 'run';
-  const route: RoutePoint[] = simplify(s.points).map((p) => {
+  const simple = simplify(s.points);
+  const routeT = simple.map((p) => Math.round(p.ms ?? 0));
+  const route: RoutePoint[] = simple.map((p) => {
     const pt: RoutePoint = [Math.round(p.lat * 1e6) / 1e6, Math.round(p.lng * 1e6) / 1e6, p.seg];
     if (p.alt != null && Number.isFinite(p.alt)) pt.push(Math.round(p.alt * 10) / 10);
     return pt;
@@ -392,6 +394,7 @@ export async function finishRun(): Promise<number | null> {
     kcal: activityKcal(kind, sum.distanceM, b?.weight ?? 70, elev),
     splits: sum.splits,
     route,
+    routeT,
     elev,
     // 5 s detail so a stretch can be zoomed into later
     timeline: bucketTimeline(s.speeds, 5),

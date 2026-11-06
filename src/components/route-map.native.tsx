@@ -4,24 +4,30 @@ import { View } from 'react-native';
 
 import { Radius, usePalette } from '@/constants/theme';
 import { GRADE_COLORS, routeBounds, routeEnds, routeFeatures } from '@/lib/route-geo';
+import { nearestIndex } from '@/lib/scrub';
 
 import type { RouteMapProps } from './route-map';
 
 /** OpenFreeMap: OpenStreetMap vector tiles, free, no API key. */
 const STYLE = 'https://tiles.openfreemap.org/styles/liberty';
 
-export function RouteMap({ route, grades, height = 200, interactive = false, follow = false }: RouteMapProps) {
+export function RouteMap({ route, grades, height = 200, interactive = false, follow = false, marker, onPick }: RouteMapProps) {
   const c = usePalette();
   const lines = useMemo(() => routeFeatures(route, grades), [route, grades]);
   const ends = useMemo(() => routeEnds(route), [route]);
   const bounds = useMemo(() => routeBounds(route), [route]);
+  const spot = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point>>(() => ({
+    type: 'FeatureCollection',
+    features: marker ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: [marker[1], marker[0]] } }] : [],
+  }), [marker]);
   const pad = { top: 28, right: 28, bottom: 28, left: 28 };
 
   return (
     <View style={[height === 'fill' ? { flex: 1 } : { height, borderRadius: Radius.md }, { overflow: 'hidden', backgroundColor: c.line }]}>
       <Map style={{ flex: 1 }} mapStyle={STYLE} logo={false} attribution attributionPosition={{ bottom: 4, right: 4 }}
         compass={interactive} scaleBar={false} dragPan={interactive || follow} touchZoom={interactive || follow}
-        doubleTapZoom={interactive} doubleTapHoldZoom={interactive} touchRotate={false} touchPitch={false}>
+        doubleTapZoom={interactive} doubleTapHoldZoom={interactive} touchRotate={false} touchPitch={false}
+        onPress={onPick ? (e) => { const [lng, lat] = e.nativeEvent.lngLat; onPick(nearestIndex(route, lat, lng)); } : undefined}>
         {follow
           ? <Camera trackUserLocation="course" initialViewState={{ zoom: 15 }} />
           : bounds ? <Camera initialViewState={{ bounds, padding: pad }} bounds={bounds} padding={pad} /> : null}
@@ -42,6 +48,9 @@ export function RouteMap({ route, grades, height = 200, interactive = false, fol
               paint={{ 'circle-radius': 6, 'circle-stroke-width': 2, 'circle-stroke-color': '#ffffff', 'circle-color': ['match', ['get', 'end'], 0, c.ok, c.bad] }} />
           </GeoJSONSource>
         ) : null}
+        <GeoJSONSource id="spot" data={spot}>
+          <Layer id="spot-dot" type="circle" paint={{ 'circle-radius': 8, 'circle-color': c.ink, 'circle-stroke-width': 3, 'circle-stroke-color': '#ffffff' }} />
+        </GeoJSONSource>
         {follow ? <NativeUserLocation mode="course" /> : null}
       </Map>
     </View>

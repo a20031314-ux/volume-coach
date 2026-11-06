@@ -72,6 +72,8 @@ export interface Run extends SyncMeta {
   kind?: ActivityKind;
   /** simplified route as [lat, lng, segment, gps altitude?] */
   route: RoutePoint[];
+  /** moving second at each route point (newer runs) */
+  routeT?: number[];
   /** climb, descent and grade; GPS-based at save time, replaced by terrain data when online */
   elev?: Elevation | null;
   /** weather at the start, fetched right after saving; already folded into kcal */
