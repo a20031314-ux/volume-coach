@@ -61,7 +61,10 @@
     "eas:init": "npx eas-cli@latest init && npx eas-cli@latest update:configure",
     "build:android": "npx eas-cli@latest build --platform android --profile preview",
     "build:ios": "npx eas-cli@latest build --platform ios --profile ios-testflight --auto-submit",
-    "update": "npx eas-cli@latest update --channel main --environment preview"
+    "update": "npx eas-cli@latest update --channel main --environment preview",
+    "privacy": "node scripts/build-privacy.mjs",
+    "build:android:store": "npx eas-cli@latest build --platform android --profile production",
+    "update:prod": "npx eas-cli@latest update --channel production --environment production"
   },
   "private": true
 }

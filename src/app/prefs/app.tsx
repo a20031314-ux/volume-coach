@@ -3,8 +3,14 @@ import * as Updates from 'expo-updates';
 import { useState } from 'react';
 import { Platform } from 'react-native';
 
+import { router } from 'expo-router';
+
 import { Group, ListRow, Page } from '@/components/layout';
 import { useToast } from '@/components/toast';
+import { ConfirmButton } from '@/components/ui';
+import { useHealth } from '@/health/use-steps';
+import { useMove } from '@/move/tracker';
+import { useData } from '@/store/store';
 
 const stamp = (d: Date | null) =>
   d ? `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` : '설치 버전';
@@ -41,6 +47,17 @@ export default function AppInfo() {
       <Group>
         <ListRow label={busy ? '확인 중…' : '업데이트 확인'} onPress={busy ? undefined : () => void check()} last />
       </Group>
+      <Group>
+        <ListRow label="개인정보처리방침" onPress={() => router.push('/prefs/privacy')} last />
+      </Group>
+      <ConfirmButton label="이 기기의 기록 모두 지우기" confirmLabel="정말 지우기 (되돌릴 수 없어요)" style={{ alignSelf: 'center' }}
+        onConfirm={() => {
+          // device only: the server copy (if signed in) stays until the account is deleted
+          useData.getState().resetAll();
+          useMove.setState({ days: {} });
+          useHealth.setState({ days: {}, readAt: {}, buckets: {}, bucketsAt: {} });
+          toast('이 기기의 기록을 지웠어요');
+        }} />
     </Page>
   );
 }
