@@ -2,10 +2,9 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
-import { ElevationChart } from '@/components/elevation-chart';
 import { Disclosure, Sheet } from '@/components/layout';
-import { PaceTimeline } from '@/components/pace-timeline';
 import { RouteMap } from '@/components/route-map';
+import { TlNode } from '@/components/timeline';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, Chip, ConfirmButton, Meter, Pills, Row, Screen, Segmented, Stepper, T } from '@/components/ui';
 import { Radius, Space, usePalette } from '@/constants/theme';
@@ -13,14 +12,13 @@ import { useNow } from '@/hooks/use-now';
 import { fmt } from '@/lib/dates';
 import { PHASE_NAME, buildPhases, phaseAt, planTotalS, type PhaseKind } from '@/lib/interval';
 import { body } from '@/lib/profile';
-import { KIND_NAME, activityKcal, gradeAdjustedPace, type ActivityKind, type RoutePoint } from '@/lib/elevation';
+import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/lib/elevation';
 import { fmtDuration, fmtKm, fmtPace } from '@/lib/run';
 import type { IntervalPlanData, RunOptions } from '@/lib/types';
 import {
   discardRun, elapsedS, finishRun, isTrackingAvailable, livePace, openSettings, pauseRun, phasesOf, reconcileRun,
   prepareRun, resumeRun, sayCount, startRun, tickCues, useRun, type StartResult,
 } from '@/run/tracker';
-import { enrichElevation } from '@/run/elevation-fetch';
 import { live, useData } from '@/store/store';
 
 const PRESETS: { n: string; p: Partial<IntervalPlanData> }[] = [
@@ -35,7 +33,6 @@ export default function RunScreen() {
   const toast = useToast();
   const run = useRun();
   const runsT = useData((s) => s.runs);
-  const removeRun = useData((s) => s.removeRun);
   const settings = useData((s) => s.settings);
   const update = useData((s) => s.updateSettings);
   const bodyT = useData((s) => s.bodyComps);
@@ -47,7 +44,6 @@ export default function RunScreen() {
   /** seconds left before recording starts; null when not counting */
   const [count, setCount] = useState<number | null>(null);
   const [granted, setGranted] = useState(false);
-  const [open, setOpen] = useState<string | null>(null);
   const [editing, setEditing] = useState(false);
   const [voiceSheet, setVoiceSheet] = useState(false);
   const opts = settings.run;
@@ -117,10 +113,6 @@ export default function RunScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [count]);
   const liveRoute = useMemo<RoutePoint[]>(() => run.points.map((p) => [p.lat, p.lng, p.seg]), [run.points]);
-  useEffect(() => {
-    const r = open ? useData.getState().runs[open] : undefined;
-    if (r && r.elev?.source !== 'dem') void enrichElevation(r);
-  }, [open]);
   const phaseColor = (k: PhaseKind) => (k === 'work' ? c.accent : k === 'rest' ? c.ok : c.rest);
 
   return (
@@ -266,90 +258,17 @@ export default function RunScreen() {
 
 
       <T v="label">기록</T>
-      {!runs.length ? <T v="muted" style={{ textAlign: 'center', paddingVertical: Space.lg }}>아직 러닝 기록이 없어요.</T> : null}
-      {runs.map((r) => {
-        const expanded = open === r.id;
-        const works = (r.phases ?? []).filter((p) => p.kind === 'work');
-        return (
-          <Card key={r.id} style={{ gap: Space.sm }}>
-            <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-              <View style={{ flexShrink: 1 }}>
-                <T v="title">{fmtKm(r.distanceM)}km{r.kind && r.kind !== 'run' ? ` · ${KIND_NAME[r.kind]}` : ''}{r.intervalPlan ? ' · 인터벌' : ''}</T>
-                <T v="small">{fmt(r.date)} · {new Date(r.startedAt).toTimeString().slice(0, 5)}–{new Date(r.endedAt).toTimeString().slice(0, 5)}</T>
-              </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                <T v="num" style={{ fontSize: 17 }}>{fmtDuration(r.movingS)} · {fmtPace(r.paceSecPerKm)}</T>
-                <T v="small">{r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m · ` : ''}{r.kcal}kcal</T>
-              </View>
-            </Row>
-            {expanded ? (
-              <>
-                {r.timeline?.length ? (
-                  <View style={{ gap: 4 }}>
-                    <T v="muted">시간대별 페이스{r.phases?.length ? ' · 색칠된 곳이 달리기 구간' : ''} · 점선은 평균</T>
-                    <PaceTimeline run={r} />
-                  </View>
-                ) : null}
-                {works.length ? (
-                  <View>
-                    <T v="muted">달리기 구간</T>
-                    {works.map((p) => (
-                      <Row key={p.rep} style={{ justifyContent: 'space-between', paddingVertical: 4, borderTopWidth: 1, borderColor: c.line, flexWrap: 'nowrap' }}>
-                        <T v="muted">{p.rep}회 · {fmtDuration(p.durS)}</T>
-                        <T>{p.distanceM}m</T>
-                        <T v="num" style={{ fontSize: 15 }}>{fmtPace(p.paceS)}
-                          {r.intervalPlan?.targetPaceS && p.paceS ? <T v="small"> {p.paceS - r.intervalPlan.targetPaceS > 0 ? '+' : '−'}{Math.abs(Math.round(p.paceS - r.intervalPlan.targetPaceS))}초</T> : null}
-                        </T>
-                      </Row>
-                    ))}
-                  </View>
-                ) : null}
-                <RouteMap route={r.route} grades={r.elev?.pointGrade} />
-                <Button label="지도 크게 보기" kind="ghost" onPress={() => router.push({ pathname: '/run-map', params: { id: r.id } })} style={{ alignSelf: 'flex-start' }} />
-                {r.elev ? (
-                  <View style={{ gap: 4 }}>
-                    <Row style={{ justifyContent: 'space-between' }}>
-                      <T v="muted">고도{r.elev.source === 'gps' ? ' · GPS' : ''}</T>
-                      <T v="num" style={{ fontSize: 15 }}>↑{r.elev.gainM}m ↓{r.elev.lossM}m · 최고 {r.elev.maxM}m</T>
-                    </Row>
-                    <ElevationChart elev={r.elev} />
-                    {r.elev.source === 'dem' ? <T v="small">고도 데이터: Copernicus DEM · Open-Meteo</T> : null}
-                    {(r.kind ?? 'run') === 'run' && r.elev.gainM >= 10 ? (
-                      <Row style={{ justifyContent: 'space-between' }}>
-                        <T v="muted">경사 보정 페이스</T>
-                        <T v="num" style={{ fontSize: 15 }}>{fmtPace(gradeAdjustedPace(r.movingS, r.elev))}</T>
-                      </Row>
-                    ) : null}
-                    {r.elev.climbs.map((cl, i) => (
-                      <Row key={i} style={{ justifyContent: 'space-between', paddingVertical: 4, borderTopWidth: 1, borderColor: c.line, flexWrap: 'nowrap' }}>
-                        <T v="muted">오르막 {(cl.startM / 1000).toFixed(1)}km</T>
-                        <T>{cl.lengthM}m · +{cl.gainM}m</T>
-                        <T v="num" style={{ fontSize: 15, color: cl.gradePct >= 8 ? c.bad : c.warn }}>{cl.gradePct}%</T>
-                      </Row>
-                    ))}
-                  </View>
-                ) : null}
-                {r.splits.length ? (
-                  <View>
-                    <T v="muted">1km 구간</T>
-                    {r.splits.map((sp) => (
-                      <Row key={sp.km} style={{ justifyContent: 'space-between', paddingVertical: 4, borderTopWidth: 1, borderColor: c.line }}>
-                        <T v="muted">{sp.km}km</T><T v="num" style={{ fontSize: 15 }}>{fmtPace(sp.seconds)}</T>
-                      </Row>
-                    ))}
-                  </View>
-                ) : null}
-                <Row style={{ justifyContent: 'space-between' }}>
-                  <Button label="접기" kind="ghost" onPress={() => setOpen(null)} />
-                  <ConfirmButton label="삭제" onConfirm={() => { removeRun(r.id); toast('삭제됨'); }} />
-                </Row>
-              </>
-            ) : (
-              <Button label="자세히" kind="ghost" onPress={() => setOpen(r.id)} style={{ alignSelf: 'flex-start' }} />
-            )}
-          </Card>
-        );
-      })}
+      {!runs.length ? <T v="muted" style={{ textAlign: 'center', paddingVertical: Space.lg }}>아직 기록이 없어요.</T> : null}
+      {runs.length ? (
+        <View>
+          {runs.slice(0, 10).map((r, i, arr) => (
+            <TlNode key={r.id} time={fmt(r.date).replace(/\s*\(.*\)/, '')} color={(r.kind ?? 'run') === 'run' ? c.warn : c.ok}
+              title={`${KIND_NAME[r.kind ?? 'run']}${r.intervalPlan ? ' · 인터벌' : ''} · ${fmtKm(r.distanceM)}km`}
+              sub={[fmtDuration(r.movingS), fmtPace(r.paceSecPerKm), r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · ')}
+              onPress={() => router.push({ pathname: '/activity/run', params: { id: r.id } })} last={i === arr.length - 1} />
+          ))}
+        </View>
+      ) : null}
     </Screen>
   );
 }

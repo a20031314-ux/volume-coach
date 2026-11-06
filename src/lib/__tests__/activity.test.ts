@@ -50,3 +50,21 @@ describe('dayActivity', () => {
     expect(activityLine(dayActivity(D, { logs: [], sessions: [], runs: [], steps: null, weightKg: 80, now: T0 }))).toBe('');
   });
 });
+
+describe('dayTimeline', () => {
+  it('orders lifting, runs and walks by time and groups loose logs', async () => {
+    const { dayTimeline, span } = await import('../timeline');
+    const s = { ...session('s1', 60), startedAt: T0 + 3600e3, endedAt: T0 + 7200e3, exercises: [{ key: 'a', name: '벤치', muscle: 'chest', planned: 3, status: 'done', sets: [], doneSets: 3, logId: 'x' }] } as Session;
+    const items = dayTimeline(D, {
+      logs: [log('a', 3, 's1'), { ...log('b', 4), at: T0 - 7200e3 }],
+      sessions: [s],
+      runs: [{ ...run(5, 28), startedAt: T0 - 3600e3, endedAt: T0 - 1800e3 }],
+      walks: [{ kind: 'walk', startMs: T0, endMs: T0 + 900e3, distanceM: 1200, from: 0, to: 5 }, { kind: 'vehicle', startMs: T0 + 1000e3, endMs: T0 + 2000e3, distanceM: 8000, from: 5, to: 9 }],
+    });
+    expect(items.map((i) => i.title)).toEqual(['웨이트 기록', '러닝', '걷기', '웨이트']);
+    expect(items[3].sub).toBe('1개 운동 · 3세트');
+    expect(items[0].sub).toBe('1개 운동 · 4세트');
+    expect(items[2].target).toEqual({ type: 'move', date: D, index: 0 });
+    expect(span({ startMs: T0, endMs: null })).toMatch(/–$/);
+  });
+});

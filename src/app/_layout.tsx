@@ -1,5 +1,6 @@
 // Registers the background location task before anything else runs.
 import '@/run/tracker';
+import { resumeMove } from '@/move/tracker';
 
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -25,6 +26,7 @@ export default function RootLayout() {
   useEffect(() => {
     if (hydrated) SplashScreen.hideAsync();
   }, [hydrated]);
+  useEffect(() => { void resumeMove(); }, []);
 
   if (!hydrated) return null;
 
@@ -46,8 +48,12 @@ export default function RootLayout() {
               <Stack.Screen name="prefs/body" options={{ headerShown: true, title: '신체 정보' }} />
               <Stack.Screen name="prefs/rules" options={{ headerShown: true, title: '운동 규칙' }} />
               <Stack.Screen name="prefs/workout" options={{ headerShown: true, title: '기록 방식' }} />
+              <Stack.Screen name="activity/session" options={{ headerShown: true, title: '웨이트' }} />
+              <Stack.Screen name="activity/run" options={{ headerShown: true, title: '유산소' }} />
+              <Stack.Screen name="activity/lifts" options={{ headerShown: true, title: '웨이트 기록' }} />
+              <Stack.Screen name="activity/move" options={{ headerShown: true, title: '걷기' }} />
               <Stack.Screen name="run-map" options={{ headerShown: true, title: '경로' }} />
-              <Stack.Screen name="prefs/health" options={{ headerShown: true, title: '걸음 수' }} />
+              <Stack.Screen name="prefs/health" options={{ headerShown: true, title: '걸음·이동' }} />
               <Stack.Screen name="prefs/app" options={{ headerShown: true, title: '앱 정보' }} />
               <Stack.Screen name="prefs/account" options={{ headerShown: true, title: '계정' }} />
               <Stack.Screen name="account" options={{ presentation: 'modal', headerShown: true, title: '계정' }} />

@@ -6,6 +6,7 @@ import { Group, ListRow } from '@/components/layout';
 import { Screen, T } from '@/components/ui';
 import { HEALTH_NAME } from '@/health/steps';
 import { useHealth } from '@/health/use-steps';
+import { useMove } from '@/move/tracker';
 import { bodySource, latestBodyComp } from '@/lib/profile';
 import type { Goal } from '@/lib/types';
 import { useAuth } from '@/store/auth';
@@ -27,6 +28,7 @@ export default function SettingsScreen() {
     return p.weight ? `직접 입력 · ${p.weight}kg` : '직접 입력';
   }, [bodyT, p]);
   const health = useHealth((x) => x.enabled);
+  const moving = useMove((x) => x.enabled);
   const marks = Object.keys(s.exercisePrefs).length;
 
   return (
@@ -37,7 +39,7 @@ export default function SettingsScreen() {
         <ListRow label="운동 목록" value={marks ? `표시 ${marks}개` : undefined} onPress={() => router.push('/exercises')} />
         <ListRow label="운동 규칙" value={`주 ${s.min}~${s.max}세트${s.deload ? ' · 디로드' : ''}`} onPress={() => router.push('/prefs/rules')} />
         <ListRow label="기록 방식" value={s.session.detail === 'set' ? '세트별' : '운동별'} onPress={() => router.push('/prefs/workout')} />
-        <ListRow label="걸음 수" value={health ? HEALTH_NAME : '꺼짐'} onPress={() => router.push('/prefs/health')} last />
+        <ListRow label="걸음·이동" value={[health ? HEALTH_NAME : null, moving ? '이동 기록' : null].filter(Boolean).join(' · ') || '꺼짐'} onPress={() => router.push('/prefs/health')} last />
       </Group>
 
       <Group title="나">

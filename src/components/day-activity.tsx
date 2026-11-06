@@ -7,13 +7,16 @@ import { Button, DayNav, Row, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { HEALTH_NAME } from '@/health/steps';
 import { useDaySteps, useHealth } from '@/health/use-steps';
+import { walkTotals } from '@/lib/movement';
+import { useMove } from '@/move/tracker';
+import { useDayMove } from '@/move/use-move';
 import { useNow } from '@/hooks/use-now';
 import { activityLine, dayActivity, type DayActivity } from '@/lib/activity';
 import { addDays, fmt, today } from '@/lib/dates';
 import { body } from '@/lib/profile';
 import { live, useData } from '@/store/store';
 
-function useDayActivity(date: string): DayActivity & { stepsState: 'off' | 'loading' | 'denied' | 'ok' } {
+export function useDayActivity(date: string): DayActivity & { stepsState: 'off' | 'loading' | 'denied' | 'ok' } {
   const now = useNow(60e3);
   const steps = useDaySteps(date, now.getTime());
   const enabled = useHealth((s) => s.enabled);
@@ -22,12 +25,14 @@ function useDayActivity(date: string): DayActivity & { stepsState: 'off' | 'load
   const runs = useData((s) => s.runs);
   const profile = useData((s) => s.settings.profile);
   const comps = useData((s) => s.bodyComps);
+  const move = useDayMove(date);
+  const walkedM = walkTotals(move.segments).m;
   return useMemo(() => {
     const weightKg = body(profile, live(comps))?.weight || 70;
-    const a = dayActivity(date, { logs: live(logs), sessions: live(sessions), runs: live(runs), steps: steps ?? null, weightKg, now: now.getTime() });
+    const a = dayActivity(date, { logs: live(logs), sessions: live(sessions), runs: live(runs), steps: steps ?? null, weightKg, now: now.getTime(), walkedM });
     const stepsState = !enabled ? 'off' : steps === undefined ? 'loading' : steps === null ? 'denied' : 'ok';
     return { ...a, stepsState } as const;
-  }, [date, logs, sessions, runs, profile, comps, steps, enabled, now]);
+  }, [date, logs, sessions, runs, profile, comps, steps, enabled, now, walkedM]);
 }
 
 /** One tappable line on 오늘 with the day's total; details live in a sheet. */
@@ -36,7 +41,8 @@ export function ActivityRow() {
   const [open, setOpen] = useState(false);
   const a = useDayActivity(today());
   const line = activityLine(a);
-  if (!line && a.stepsState === 'off') return null;
+  const moving = useMove((s) => s.enabled);
+  if (!line && a.stepsState === 'off' && !moving) return null;
   return (
     <>
       <Pressable accessibilityRole="button" onPress={() => setOpen(true)}
@@ -71,7 +77,9 @@ export function ActivitySheet({ open, onClose }: { open: boolean; onClose: () =>
   const a = useDayActivity(date);
   const isToday = date === today();
   const steps = a.walk
-    ? <Line name="걸음" main={`${a.walk.steps.toLocaleString('ko-KR')}보`} sub={`${a.walk.km.toFixed(1)}km${a.outdoor.count ? ' (기록 제외)' : ''}`} kcal={a.walk.kcal} />
+    ? a.walk.steps != null
+      ? <Line name="걸음" main={`${a.walk.steps.toLocaleString('ko-KR')}보`} sub={`${a.walk.km.toFixed(1)}km${a.outdoor.count ? ' (기록 제외)' : ''}`} kcal={a.walk.kcal} />
+      : <Line name="걷기" main={`${a.walk.km.toFixed(1)}km`} sub="이동 기록" kcal={a.walk.kcal} />
     : a.stepsState === 'denied'
       ? <Line name="걸음" main="읽을 수 없음" sub={`${HEALTH_NAME}에서 권한을 확인하세요`} />
       : a.stepsState === 'loading' ? <Line name="걸음" main="…" /> : null;

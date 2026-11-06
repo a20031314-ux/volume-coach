@@ -8,8 +8,8 @@ export interface DayActivity {
   run: { km: number; minutes: number; kcal: number; count: number };
   /** walks and hikes recorded with GPS */
   outdoor: { km: number; minutes: number; kcal: number; count: number; gainM: number };
-  /** null when steps aren't connected or not read yet */
-  walk: { steps: number; km: number; kcal: number } | null;
+  /** from the health store (steps) or, without it, from all-day movement tracking (no steps) */
+  walk: { steps: number | null; km: number; kcal: number } | null;
   /** minutes of deliberate exercise (lifting, running, recorded walks and hikes) */
   activeMin: number;
   kcal: number;
@@ -28,7 +28,7 @@ const WALK_KCAL_PER_KG_KM = 0.5;
  */
 export function dayActivity(
   date: string,
-  data: { logs: WorkoutLog[]; sessions: Session[]; runs: Run[]; steps: DaySteps | null; weightKg: number; now: number },
+  data: { logs: WorkoutLog[]; sessions: Session[]; runs: Run[]; steps: DaySteps | null; weightKg: number; now: number; walkedM?: number },
 ): DayActivity {
   const { weightKg: w } = data;
   const logs = data.logs.filter((l) => l.date === date);
@@ -59,6 +59,9 @@ export function dayActivity(
   if (data.steps) {
     const km = Math.max(0, data.steps.meters - trackedM) / 1000;
     walk = { steps: Math.round(data.steps.steps), km: Math.round(km * 10) / 10, kcal: Math.round(km * w * WALK_KCAL_PER_KG_KM) };
+  } else if (data.walkedM) {
+    const km = data.walkedM / 1000;
+    walk = { steps: null, km: Math.round(km * 10) / 10, kcal: Math.round(km * w * WALK_KCAL_PER_KG_KM) };
   }
 
   const liftKcal = Math.round(liftMin * w * LIFT_KCAL_PER_KG_MIN);
@@ -75,7 +78,7 @@ export function dayActivity(
 /** One-line summary, e.g. "8,214보 · 웨이트 52분 · 러닝 5.0km". Empty when nothing happened. */
 export function activityLine(a: DayActivity): string {
   return [
-    a.walk && a.walk.steps ? `${a.walk.steps.toLocaleString('ko-KR')}보` : null,
+    a.walk ? (a.walk.steps != null ? (a.walk.steps ? `${a.walk.steps.toLocaleString('ko-KR')}보` : null) : a.walk.km ? `걷기 ${a.walk.km.toFixed(1)}km` : null) : null,
     a.lift.minutes ? `웨이트 ${a.lift.minutes}분` : null,
     a.run.count ? `러닝 ${a.run.km.toFixed(1)}km` : null,
     a.outdoor.count ? `걷기·등산 ${a.outdoor.km.toFixed(1)}km` : null,
