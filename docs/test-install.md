@@ -63,11 +63,8 @@ npm run build:ios
 - GitHub 저장소 → **Actions → Build test app → Run workflow** → 플랫폼 선택 → 실행
 - 끝나면 Android는 expo.dev의 링크로 다시 설치하고, iPhone은 TestFlight에서 업데이트하면 돼요.
 
-## 6. (권장) 서버 연결
+## 6. 서버 연결
 
-앱을 지웠다 다시 설치해도 기록이 남게 하려면 Supabase를 연결하세요. README의 "서버(Supabase) 연결"대로 프로젝트를 만든 뒤, 값을 `.env`가 아니라 **expo.dev → 프로젝트 → Environment variables → preview 환경**에 넣으세요.
+Supabase 프로젝트(`eiohgdcxtugbufuvwkzt`)가 앱에 기본으로 연결돼 있어요. 설정 → 계정에서 가입하면 기록이 서버에 저장되고 다른 폰과 동기화돼요.
 
-- `EXPO_PUBLIC_SUPABASE_URL`
-- `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
-
-다음 업데이트나 빌드부터 로그인 메뉴가 나타나요.
+다른 Supabase 프로젝트를 쓰려면 expo.dev → 프로젝트 → Environment variables → **preview** 환경에 `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`를 넣으면 그 값이 우선해요.
