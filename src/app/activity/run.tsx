@@ -14,11 +14,13 @@ import { fmt } from '@/lib/dates';
 import { KIND_NAME, gradeAdjustedPace } from '@/lib/elevation';
 import { PHASE_NAME } from '@/lib/interval';
 import { RATE_NAME, fmtDuration, fmtKm, fmtRate, type RateUnit } from '@/lib/run';
+import { fmtSprint, kmh, splitSpeeds } from '@/lib/sprint';
 import { presetRanges, rangeStats, type Range } from '@/lib/range';
 import { momentAt, routeTimes } from '@/lib/scrub';
 import { clock } from '@/lib/timeline';
 import { weatherFactor } from '@/lib/weather';
 import { enrichElevation } from '@/run/elevation-fetch';
+import type { Run } from '@/lib/types';
 import { useData } from '@/store/store';
 
 /** One run / walk / hike: 시작 → 시간대별 페이스 (구간) → 끝, then map and hills. */
@@ -58,22 +60,24 @@ export default function RunDetail() {
 
   return (
     <Page>
-      <Card>
-        <T v="small">{fmt(r.date)} · {KIND_NAME[kind]}{r.intervalPlan ? ' · 인터벌' : ''}</T>
-        <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
-          <T v="big" style={{ fontSize: 34, lineHeight: 40 }}>{fmtKm(r.distanceM)}km</T>
-          <View style={{ alignItems: 'flex-end' }}>
-            <T v="num" style={{ fontSize: 18 }}>{fmtDuration(r.movingS)} · {rate(r.paceSecPerKm)}</T>
-            <T v="small">{r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m · ` : ''}{r.kcal}kcal</T>
-          </View>
-        </Row>
-        {r.weather ? (
-          <T v="small">
-            {`기온 ${Math.round(r.weather.tempC)}° · 체감 ${Math.round(r.weather.feelsC)}° · 습도 ${r.weather.humidity}% · 바람 ${r.weather.windKmh}km/h`}
-            {weatherFactor(r.weather) > 1 ? ` · 칼로리 +${Math.round((weatherFactor(r.weather) - 1) * 100)}% 반영` : ''}
-          </T>
-        ) : null}
-      </Card>
+      {r.sprint ? <SprintCard sprint={r.sprint} date={fmt(r.date)} /> : (
+        <Card>
+          <T v="small">{fmt(r.date)} · {KIND_NAME[kind]}{r.intervalPlan ? ' · 인터벌' : ''}</T>
+          <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+            <T v="big" style={{ fontSize: 34, lineHeight: 40 }}>{fmtKm(r.distanceM)}km</T>
+            <View style={{ alignItems: 'flex-end' }}>
+              <T v="num" style={{ fontSize: 18 }}>{fmtDuration(r.movingS)} · {rate(r.paceSecPerKm)}</T>
+              <T v="small">{r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m · ` : ''}{r.kcal}kcal</T>
+            </View>
+          </Row>
+          {r.weather ? (
+            <T v="small">
+              {`기온 ${Math.round(r.weather.tempC)}° · 체감 ${Math.round(r.weather.feelsC)}° · 습도 ${r.weather.humidity}% · 바람 ${r.weather.windKmh}km/h`}
+              {weatherFactor(r.weather) > 1 ? ` · 칼로리 +${Math.round((weatherFactor(r.weather) - 1) * 100)}% 반영` : ''}
+            </T>
+          ) : null}
+        </Card>
+      )}
 
       {r.route.length > 1 ? (
         <View style={{ gap: 6 }}>
@@ -168,5 +172,36 @@ export default function RunDetail() {
 
       <ConfirmButton label="이 기록 삭제" onConfirm={() => { removeRun(r.id); toast('삭제됨'); router.back(); }} />
     </Page>
+  );
+}
+
+/** Sprint result: the time, top speed, and how fast each stretch went. */
+function SprintCard({ sprint, date }: { sprint: NonNullable<Run['sprint']>; date: string }) {
+  const c = usePalette();
+  const parts = splitSpeeds(sprint.splits);
+  const top = Math.max(0.1, ...parts.map((p) => p.v));
+  return (
+    <Card>
+      <T v="small">{date} · 스프린트 {sprint.targetM}m</T>
+      <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+        <T v="big" style={{ fontSize: 40, lineHeight: 46 }}>{fmtSprint(sprint.timeS)}</T>
+        <View style={{ alignItems: 'flex-end' }}>
+          <T v="num" style={{ fontSize: 18 }}>최고 {kmh(sprint.topV)}</T>
+          <T v="small">{sprint.topAtM}m 지점</T>
+        </View>
+      </Row>
+      <View style={{ gap: 6 }}>
+        {parts.map((p) => (
+          <Row key={p.to} style={{ flexWrap: 'nowrap', gap: 10 }}>
+            <T v="small" style={{ width: 72, fontVariant: ['tabular-nums'] }}>{p.from}–{p.to}m</T>
+            <View style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: c.restSoft, overflow: 'hidden' }}>
+              <View style={{ width: `${(p.v / top) * 100}%`, height: 8, borderRadius: 4, backgroundColor: p.v === top ? c.accent : c.band }} />
+            </View>
+            <T v="small" style={{ width: 92, textAlign: 'right', fontVariant: ['tabular-nums'] }}>{p.s.toFixed(2)}초 · {(p.v * 3.6).toFixed(0)}</T>
+          </Row>
+        ))}
+      </View>
+      <T v="small">GPS 속도로 잰 기록이라 실제와 0.5초 안팎 차이 날 수 있어요{sprint.accM != null ? ` · 출발 때 GPS ±${sprint.accM}m` : ''}</T>
+    </Card>
   );
 }

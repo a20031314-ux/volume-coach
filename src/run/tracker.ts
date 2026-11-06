@@ -23,6 +23,7 @@ import {
 import { body } from '@/lib/profile';
 import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/lib/elevation';
 import { acceptPoint, currentPace, haversine, simplify, summarize, type GpsPoint } from '@/lib/run';
+import { spokenSprint, sprintProgress } from '@/lib/sprint';
 import { enrichElevation, gpsElevation } from '@/run/elevation-fetch';
 import { enrichWeather } from '@/run/weather-fetch';
 import { ensureNotifications } from '@/store/rest-timer';
@@ -43,6 +44,8 @@ export interface RunSetup {
   targetPaceS?: number | null;
   /** speak when off target */
   paceAlert?: boolean;
+  /** sprint distance: timed from the go signal, saved and stopped at this many metres */
+  sprintM?: number | null;
 }
 
 interface ActiveRun extends RunSetup {
@@ -59,12 +62,19 @@ interface ActiveRun extends RunSetup {
   lastAccuracy: number | null;
   cues: CueState;
   notifIds: string[];
+  /** GPS switched on before a sprint so the first fix is already there at the go signal */
+  warm?: boolean;
+  /** GPS accuracy when the sprint started, m */
+  startAcc?: number | null;
+  /** the run just saved by a sprint that finished on its own */
+  justSaved?: string | null;
 }
 
 const idle: ActiveRun = {
   status: 'idle', startedAt: 0, pausedMs: 0, pauseStart: null, seg: 0, points: [], speeds: [], distanceM: 0,
   lastFixAt: null, lastAccuracy: null, cues: initialCues, notifIds: [],
   kind: 'run', plan: null, voice: true, kmAlert: true, everyMin: 0,
+  sprintM: null, warm: false, startAcc: null, justSaved: null,
 };
 
 /** AsyncStorage writes at most every 4 s; a long run's track is a few hundred KB. */
@@ -152,6 +162,17 @@ export function appendLocations(locs: Location.LocationObject[]) {
   }
   useRun.setState(patch);
   tickCues();
+  checkSprint();
+}
+
+/** A sprint stops and saves itself once the target is crossed. */
+let finishing = false;
+function checkSprint() {
+  const s = useRun.getState();
+  if (s.status !== 'running' || !s.sprintM || finishing) return;
+  if (sprintProgress(s.speeds, s.sprintM).finishS == null) return;
+  finishing = true;
+  void finishRun().finally(() => { finishing = false; });
 }
 
 /* ---------- voice coach ---------- */
@@ -299,18 +320,47 @@ export function sayCount(n: number) {
   speak([String(n)]);
 }
 
+/**
+ * Sprint: switch GPS on while the runner gets set, so a fix is already there at the go signal.
+ * Fixes arriving now only update the accuracy shown on screen.
+ */
+export async function warmGps(kind: ActivityKind): Promise<StartResult> {
+  useRun.setState({ ...idle, kind, warm: true });
+  try {
+    if (!(await Location.hasStartedLocationUpdatesAsync(RUN_TASK))) await startUpdates();
+  } catch (e) {
+    useRun.setState({ ...idle });
+    return { ok: false, message: `위치를 켜지 못했어요: ${(e as Error).message}` };
+  }
+  return { ok: true };
+}
+
+/** Sprint cancelled before the start: switch GPS off again. */
+export async function coolGps() {
+  if (useRun.getState().status !== 'idle') return;
+  await stopUpdates();
+  useRun.setState({ warm: false, lastFixAt: null, lastAccuracy: null });
+}
+
 /** Starts recording right away. Call prepareRun first; this only re-checks permission. */
 export async function startRun(setup: RunSetup): Promise<StartResult> {
   const fg = await Location.getForegroundPermissionsAsync();
   if (fg.status !== 'granted') return { ok: false, message: '거리를 재려면 위치 권한이 필요해요.', openSettings: true };
-  useRun.setState({ ...idle, ...setup, status: 'running', startedAt: Date.now() });
+  const prev = useRun.getState();
+  if (setup.sprintM) {
+    // The clock starts with the word: set the time and speak before anything else waits.
+    useRun.setState({ ...idle, ...setup, status: 'running', startedAt: Date.now(), startAcc: prev.lastAccuracy, lastFixAt: prev.lastFixAt, lastAccuracy: prev.lastAccuracy });
+    if (setup.voice) speak(['출발']);
+  } else {
+    useRun.setState({ ...idle, ...setup, status: 'running', startedAt: Date.now() });
+  }
   try {
-    await startUpdates();
+    if (!(await Location.hasStartedLocationUpdatesAsync(RUN_TASK))) await startUpdates();
   } catch (e) {
     useRun.setState({ ...idle });
     return { ok: false, message: `위치 기록을 시작하지 못했어요: ${(e as Error).message}` };
   }
-  if (setup.voice) speak([setup.plan ? '인터벌 러닝을 시작합니다' : { run: '러닝을', walk: '걷기를', hike: '등산을' }[setup.kind] + ' 시작합니다']);
+  if (setup.voice && !setup.sprintM) speak([setup.plan ? '인터벌 러닝을 시작합니다' : { run: '러닝을', walk: '걷기를', hike: '등산을' }[setup.kind] + ' 시작합니다']);
   tickCues();
   void schedulePhaseNotifications();
   return { ok: true };
@@ -357,6 +407,7 @@ export async function finishRun(): Promise<number | null> {
   const movingS = elapsedS({ ...s, status: 'running', pauseStart: null }, endedAt);
   const phases = phasesOf(s);
   useRun.setState({ ...idle });
+  if (s.sprintM) return saveSprint(s);
   if (sum.distanceM < 50) return null;
   const pace = movingS / (sum.distanceM / 1000);
   if (s.voice) speak([`${KIND_NAME[s.kind ?? 'run']} 끝. 총 ${(sum.distanceM / 1000).toFixed(2)}킬로미터, 평균 ${spokenRate(pace, s.unit)}`]);
@@ -396,6 +447,42 @@ export async function finishRun(): Promise<number | null> {
   }
   return sum.distanceM;
 }
+
+/** Saves a finished sprint; one stopped before the target is dropped. */
+function saveSprint(s: ActiveRun): number | null {
+  const target = s.sprintM!;
+  const p = sprintProgress(s.speeds, target);
+  if (p.finishS == null) return null;
+  const finishS = p.finishS;
+  if (s.voice) speak([`도착. ${spokenSprint(finishS)}`]);
+  const data = useData.getState();
+  const b = body(data.settings.profile, live(data.bodyComps));
+  const kind = s.kind ?? 'run';
+  const simple = simplify(s.points);
+  const id = data.addRun({
+    date: iso(new Date(s.startedAt)),
+    kind,
+    startedAt: s.startedAt,
+    endedAt: s.startedAt + Math.round(finishS * 1000),
+    distanceM: target,
+    movingS: Math.max(1, Math.round(finishS)),
+    paceSecPerKm: finishS / (target / 1000),
+    kcal: activityKcal(kind, target, b?.weight ?? 70, null),
+    splits: [],
+    route: simple.map((pt) => [Math.round(pt.lat * 1e6) / 1e6, Math.round(pt.lng * 1e6) / 1e6, pt.seg]),
+    routeT: simple.map((pt) => Math.round(pt.ms ?? 0)),
+    // 1 s detail: a sprint is over in seconds
+    timeline: bucketTimeline(s.speeds.filter((x) => x.ms <= finishS + 1), 1),
+    sprint: {
+      targetM: target, timeS: finishS, topV: Math.round(p.topV * 100) / 100, topAtM: p.topAtM,
+      splits: p.splits, accM: s.startAcc != null ? Math.round(s.startAcc) : null,
+    },
+  });
+  useRun.setState({ justSaved: id });
+  return target;
+}
+
+export const dismissSaved = () => useRun.setState({ justSaved: null });
 
 export async function discardRun() {
   await stopUpdates();

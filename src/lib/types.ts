@@ -84,6 +84,20 @@ export interface Run extends SyncMeta {
   timeline?: [number, number][];
   intervalPlan?: IntervalPlanData | null;
   phases?: { kind: 'warmup' | 'work' | 'rest' | 'cooldown'; rep: number; durS: number; distanceM: number; paceS: number | null }[];
+  /** sprint result, timed from the go signal by GPS speed */
+  sprint?: SprintResult | null;
+}
+
+export interface SprintResult {
+  targetM: number;
+  /** seconds, hundredths */
+  timeS: number;
+  /** top speed, m/s, and where it happened */
+  topV: number;
+  topAtM: number;
+  splits: { m: number; s: number }[];
+  /** GPS accuracy at the start, m */
+  accM: number | null;
 }
 
 export interface IntervalPlanData {
@@ -97,7 +111,9 @@ export interface RunOptions {
   kmAlert: boolean;
   /** announce every N minutes (0 = off) */
   everyMin: number;
-  mode: 'free' | 'interval';
+  mode: 'free' | 'interval' | 'sprint';
+  /** sprint distance, m */
+  sprintM?: number;
   /** free-run target pace, sec/km (null = none) */
   targetPaceS?: number | null;
   /** voice nudge when off target */

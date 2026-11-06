@@ -1,6 +1,6 @@
 import { router, useFocusEffect } from 'expo-router';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, View } from 'react-native';
 
 import { Disclosure, Sheet } from '@/components/layout';
@@ -17,10 +17,12 @@ import { paceStatus, targetBand } from '@/lib/live';
 import { body } from '@/lib/profile';
 import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/lib/elevation';
 import { RATE_NAME, fmtDuration, fmtKm, fmtPace, fmtRate } from '@/lib/run';
+import { SPRINT_DISTANCES, fmtSprint, kmh, sprintProgress } from '@/lib/sprint';
+import { smoothSpeed } from '@/lib/interval';
 import type { IntervalPlanData, RunOptions } from '@/lib/types';
 import {
-  discardRun, elapsedS, finishRun, isTrackingAvailable, livePace, openSettings, pauseRun, phasesOf, reconcileRun,
-  prepareRun, resumeRun, targetNow, sayCount, startRun, tickCues, useRun, type StartResult,
+  coolGps, discardRun, dismissSaved, elapsedS, finishRun, isTrackingAvailable, livePace, openSettings, pauseRun, phasesOf, reconcileRun,
+  prepareRun, resumeRun, targetNow, sayCount, startRun, tickCues, useRun, warmGps, type StartResult,
 } from '@/run/tracker';
 import { live, useData } from '@/store/store';
 
@@ -45,12 +47,16 @@ export default function RunScreen() {
   const [available, setAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [focused, setFocused] = useState(true);
-  useFocusEffect(useCallback(() => { setFocused(true); return () => setFocused(false); }, []));
+  /** leaving the screen while getting set for a sprint calls it off */
+  const onLeave = useRef<() => void>(() => undefined);
+  useFocusEffect(useCallback(() => { setFocused(true); return () => { setFocused(false); onLeave.current(); }; }, []));
   /** seconds left before recording starts; null when not counting */
   const [count, setCount] = useState<number | null>(null);
   const [granted, setGranted] = useState(false);
   const [editing, setEditing] = useState(false);
   const [voiceSheet, setVoiceSheet] = useState(false);
+  /** sprint: GPS is on, waiting for a good fix before the countdown */
+  const [gpsWait, setGpsWait] = useState(false);
   const opts = settings.run;
   const setOpts = (patch: Partial<RunOptions>) => update({ run: { ...opts, ...patch } });
   const setPlan = (patch: Partial<IntervalPlanData>) => setOpts({ interval: { ...opts.interval, ...patch } });
@@ -59,11 +65,13 @@ export default function RunScreen() {
     void isTrackingAvailable().then(setAvailable);
     void reconcileRun();
   }, []);
+  const sprinting = run.status === 'running' && !!run.sprintM;
   useEffect(() => {
-    if (run.status === 'idle') return;
-    const t = setInterval(() => { setNow(Date.now()); tickCues(); }, 1000);
+    if (run.status === 'idle' && !gpsWait) return;
+    // a sprint clock shows tenths
+    const t = setInterval(() => { setNow(Date.now()); tickCues(); }, sprinting ? 100 : 1000);
     return () => clearInterval(t);
-  }, [run.status]);
+  }, [run.status, gpsWait, sprinting]);
 
   const runs = useMemo(() => live(runsT).sort((a, b) => b.startedAt - a.startedAt), [runsT]);
   const weekKm = useMemo(() => {
@@ -97,15 +105,23 @@ export default function RunScreen() {
   };
   const kind: ActivityKind = opts.kind ?? 'run';
   const interval = kind === 'run' && opts.mode === 'interval';
+  const sprint = kind === 'run' && opts.mode === 'sprint';
+  const sprintM = opts.sprintM ?? 100;
+  const best = useMemo(() => {
+    const out: Record<number, number> = {};
+    for (const r of runs) if (r.sprint) out[r.sprint.targetM] = Math.min(out[r.sprint.targetM] ?? Infinity, r.sprint.timeS);
+    return out;
+  }, [runs]);
   const begin = () => act(() => startRun({
     kind,
     plan: interval ? opts.interval : null,
     voice: opts.voice,
-    kmAlert: interval ? false : opts.kmAlert,
-    everyMin: interval ? 0 : opts.everyMin,
+    kmAlert: interval || sprint ? false : opts.kmAlert,
+    everyMin: interval || sprint ? 0 : opts.everyMin,
     unit: opts.unit ?? 'pace',
-    targetPaceS: interval ? null : opts.targetPaceS ?? null,
-    paceAlert: opts.paceAlert ?? true,
+    targetPaceS: interval || sprint ? null : opts.targetPaceS ?? null,
+    paceAlert: sprint ? false : opts.paceAlert ?? true,
+    sprintM: sprint ? sprintM : null,
   }));
   const countdown = opts.countdown ?? 3;
   const start = async () => {
@@ -115,9 +131,40 @@ export default function RunScreen() {
     if (!r.ok) { setProblem(r); return; }
     // permission was just granted: stop here so the run starts only when the user is ready
     if (r.asked) { setGranted(true); return; }
+    dismissSaved();
+    if (sprint) {
+      const w = await warmGps(kind);
+      if (!w.ok) { setProblem(w); return; }
+      setGpsWait(true);
+      return;
+    }
+    go();
+  };
+  const go = () => {
     if (countdown > 0) { setCount(countdown); if (opts.voice) sayCount(countdown); }
     else void begin();
   };
+  const cancel = () => {
+    setCount(null); setGpsWait(false);
+    if (sprint) void coolGps();
+  };
+  useEffect(() => {
+    onLeave.current = () => { if (gpsWait || count != null) cancel(); };
+  });
+  // start the countdown as soon as the fix is good enough
+  useEffect(() => {
+    if (!gpsWait) return;
+    return useRun.subscribe((st) => {
+      const ok = st.lastAccuracy != null && st.lastAccuracy <= 8 && st.lastFixAt != null && Date.now() - st.lastFixAt < 3000;
+      if (ok) { setGpsWait(false); go(); }
+    });
+    // go is recreated every render; this only reacts to fixes arriving
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gpsWait]);
+  const spr = run.sprintM ? sprintProgress(run.speeds, run.sprintM) : null;
+  const sprintClock = run.status === 'running' ? Math.max(0, (now - run.startedAt) / 1000) : 0;
+  const sprintV = run.sprintM ? smoothSpeed(run.speeds, secs, 2) : null;
+  const saved = run.status === 'idle' && run.justSaved ? runsT[run.justSaved] : undefined;
   useEffect(() => {
     if (count == null) return;
     const t = setTimeout(() => {
@@ -137,11 +184,26 @@ export default function RunScreen() {
     <Screen title="유산소" sub={`최근 7일 ${weekKm.toFixed(1)}km`}>
       {available === false ? <Banner text="GPS 기록은 설치한 앱에서만 쓸 수 있어요." /> : null}
 
+      {saved?.sprint ? (
+        <Card style={{ gap: Space.sm, backgroundColor: c.accentSoft, borderColor: c.accentSoft }}>
+          <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+            <T v="small">{saved.sprint.targetM}m 스프린트{best[saved.sprint.targetM] === saved.sprint.timeS ? ' · 최고 기록' : ''}</T>
+            <Button label="✕" kind="ghost" onPress={dismissSaved} />
+          </Row>
+          <T v="big" style={{ fontSize: 48, lineHeight: 54, color: c.accent }}>{fmtSprint(saved.sprint.timeS)}</T>
+          <T v="small">최고 {kmh(saved.sprint.topV)} · {saved.sprint.topAtM}m 지점</T>
+          <Row style={{ flexWrap: 'nowrap' }}>
+            <Button label="자세히" onPress={() => router.push({ pathname: '/activity/run', params: { id: saved.id } })} style={{ flex: 1 }} />
+            <Button label="한 번 더" kind="primary" disabled={busy} onPress={() => void start()} style={{ flex: 1 }} />
+          </Row>
+        </Card>
+      ) : null}
+
       {run.status === 'idle' ? (
         <Card style={{ gap: Space.lg }}>
           <Segmented options={[{ v: 'run', n: '러닝' }, { v: 'walk', n: '걷기' }, { v: 'hike', n: '등산' }]} value={kind} onChange={(v) => v && setOpts({ kind: v })} />
           {kind === 'run' ? (
-            <Segmented options={[{ v: 'free', n: '자유' }, { v: 'interval', n: '인터벌' }]} value={opts.mode} onChange={(v) => v && setOpts({ mode: v })} />
+            <Segmented options={[{ v: 'free', n: '자유' }, { v: 'interval', n: '인터벌' }, { v: 'sprint', n: '스프린트' }]} value={opts.mode} onChange={(v) => v && setOpts({ mode: v })} />
           ) : null}
           {interval ? (
             <View style={{ gap: Space.sm }}>
@@ -159,16 +221,33 @@ export default function RunScreen() {
               </View>
             </View>
           ) : null}
-          {count != null ? (
+          {sprint ? (
+            <View style={{ gap: Space.sm }}>
+              <Segmented options={SPRINT_DISTANCES.map((m) => ({ v: String(m), n: `${m}m` }))} value={String(sprintM)}
+                onChange={(v) => v && setOpts({ sprintM: Number(v) })} />
+              <T v="small">{best[sprintM] ? `최고 기록 ${fmtSprint(best[sprintM])}` : '아직 기록 없음'}</T>
+            </View>
+          ) : null}
+          {gpsWait ? (
+            <View style={{ alignItems: 'center', gap: Space.md, paddingVertical: Space.md }}>
+              <T v="title">GPS 맞추는 중</T>
+              <T v="num" style={{ fontSize: 32, color: c.warn }}>{run.lastAccuracy != null ? `±${Math.round(run.lastAccuracy)}m` : '–'}</T>
+              <T v="small" style={{ textAlign: 'center' }}>±8m 안으로 들어오면 카운트다운을 시작해요</T>
+              <Row gap={Space.md}>
+                <Button label="취소" onPress={cancel} style={{ minWidth: 110 }} />
+                <Button label="그래도 시작" onPress={() => { setGpsWait(false); go(); }} style={{ minWidth: 110 }} />
+              </Row>
+            </View>
+          ) : count != null ? (
             <View style={{ alignItems: 'center', gap: Space.md, paddingVertical: Space.md }}>
               <T v="big" style={{ fontSize: 72, lineHeight: 80, color: c.accent }}>{count}</T>
               <Row gap={Space.md}>
-                <Button label="취소" onPress={() => setCount(null)} style={{ minWidth: 110 }} />
+                <Button label="취소" onPress={cancel} style={{ minWidth: 110 }} />
                 <Button label="바로 시작" kind="primary" onPress={() => { setCount(null); void begin(); }} style={{ minWidth: 110 }} />
               </Row>
             </View>
           ) : (
-            <Button label={busy ? '준비 중…' : interval ? '인터벌 시작' : `${KIND_NAME[kind]} 시작`} kind="primary" disabled={busy} onPress={() => void start()} style={{ paddingVertical: 16 }} />
+            <Button label={busy ? '준비 중…' : interval ? '인터벌 시작' : sprint ? `${sprintM}m 스프린트 준비` : `${KIND_NAME[kind]} 시작`} kind="primary" disabled={busy} onPress={() => void start()} style={{ paddingVertical: 16 }} />
           )}
           {granted && count == null ? <T v="small" style={{ textAlign: 'center' }}>위치 허용 완료. 준비되면 시작을 누르세요.</T> : null}
           <Row style={{ justifyContent: 'space-between' }}>
@@ -204,7 +283,7 @@ export default function RunScreen() {
       </Sheet>
 
       <Sheet open={voiceSheet} title="시작 옵션" onClose={() => setVoiceSheet(false)}>
-        {!interval ? (
+        {!interval && !sprint ? (
           <>
             <T v="muted">목표 페이스</T>
             <Stepper label="분/km" value={opts.targetPaceS ?? 0} step={5} min={0} max={900}
@@ -249,7 +328,25 @@ export default function RunScreen() {
         </View>
       ) : null}
 
-      {run.status === 'running' ? (
+      {run.sprintM && run.status !== 'idle' && spr ? (
+        <Card style={{ gap: Space.lg }}>
+          <View style={{ alignItems: 'center', gap: 2 }}>
+            <T v="big" style={{ fontSize: 72, lineHeight: 80, fontVariant: ['tabular-nums'] }}>{sprintClock.toFixed(1)}</T>
+            <T v="muted">초</T>
+          </View>
+          <View style={{ gap: 6 }}>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <T v="num" style={{ fontSize: 20 }}>{Math.min(run.sprintM, Math.floor(spr.distanceM))} / {run.sprintM}m</T>
+              <T v="small">지금 {sprintV != null ? kmh(sprintV) : '–'} · 최고 {kmh(spr.topV)}</T>
+            </Row>
+            <Meter pct={(spr.distanceM / run.sprintM) * 100} color={c.accent} height={10} />
+          </View>
+          {gpsWeak ? <T v="small" style={{ textAlign: 'center', color: c.warn }}>GPS 신호가 약해요. 기록이 부정확할 수 있어요.</T> : null}
+          <ConfirmButton label="중단" confirmLabel="기록 버리고 중단" onConfirm={() => { void discardRun(); toast('스프린트를 중단했어요'); }} style={{ alignSelf: 'center' }} />
+        </Card>
+      ) : null}
+
+      {run.status === 'running' && !run.sprintM ? (
         <Card style={{ gap: Space.sm }}>
           <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
             <View>
@@ -264,7 +361,7 @@ export default function RunScreen() {
         </Card>
       ) : null}
 
-      {run.status !== 'idle' ? (
+      {run.status !== 'idle' && !run.sprintM ? (
       <Card style={{ gap: Space.lg }}>
         <View style={{ alignItems: 'center', gap: 2 }}>
           <T v="big" style={{ fontSize: 64, lineHeight: 70 }}>{fmtKm(run.distanceM)}</T>
@@ -298,7 +395,7 @@ export default function RunScreen() {
       </Card>
       ) : null}
 
-      {run.status !== 'idle' ? (
+      {run.status !== 'idle' && !run.sprintM ? (
         <Disclosure title="지도">
           <RouteMap route={liveRoute} height={260} follow />
         </Disclosure>
@@ -311,8 +408,9 @@ export default function RunScreen() {
         <View>
           {runs.slice(0, 10).map((r, i, arr) => (
             <TlNode key={r.id} time={fmt(r.date).replace(/\s*\(.*\)/, '')} color={(r.kind ?? 'run') === 'run' ? c.warn : c.ok}
-              title={`${KIND_NAME[r.kind ?? 'run']}${r.intervalPlan ? ' · 인터벌' : ''} · ${fmtKm(r.distanceM)}km`}
-              sub={[fmtDuration(r.movingS), fmtRate(r.paceSecPerKm, opts.unit), r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · ')}
+              title={r.sprint ? `스프린트 ${r.sprint.targetM}m · ${fmtSprint(r.sprint.timeS)}` : `${KIND_NAME[r.kind ?? 'run']}${r.intervalPlan ? ' · 인터벌' : ''} · ${fmtKm(r.distanceM)}km`}
+              sub={r.sprint ? `최고 ${kmh(r.sprint.topV)}${best[r.sprint.targetM] === r.sprint.timeS ? ' · 최고 기록' : ''}`
+                : [fmtDuration(r.movingS), fmtRate(r.paceSecPerKm, opts.unit), r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · ')}
               onPress={() => router.push({ pathname: '/activity/run', params: { id: r.id } })} last={i === arr.length - 1} />
           ))}
         </View>
