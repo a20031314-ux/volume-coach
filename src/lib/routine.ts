@@ -51,7 +51,7 @@ const SMALL = new Set<MuscleKey>(['bi', 'tri', 'calf', 'abs']);
 
 export interface RecommendOptions {
   profile: Profile;
-  settings: Pick<Settings, 'customExercises' | 'ability' | 'exercisePrefs'>;
+  settings: Pick<Settings, 'customExercises' | 'ability' | 'exercisePrefs'> & Partial<Pick<Settings, 'min' | 'max' | 'sec' | 'off'>>;
   schedule?: Routine['schedule'];
   /** exercises logged before */
   known?: Set<string>;
@@ -61,7 +61,9 @@ export interface RecommendOptions {
 export function recommendRoutine({ profile, settings, schedule = 'rotation', known }: RecommendOptions): Omit<Routine, 'id' | 'updatedAt'> {
   const days = profile.days ?? 4;
   const split = splitFor(days, profile.years);
-  const { rec } = recommendedVolume(profile);
+  const { rec: recommended } = recommendedVolume(profile);
+  // the user's own weekly range wins over the recommendation
+  const rec = { ...recommended, min: settings.min ?? recommended.min, max: settings.max ?? recommended.max };
   const eq: Equipment = profile.equipment ?? 'gym';
   const avoid = new Set(profile.avoid ?? []);
   // only exercises this user can and wants to do, favourites and familiar ones first
@@ -120,6 +122,17 @@ export function recommendRoutine({ profile, settings, schedule = 'rotation', kno
     }
     return { key: `d${di + 1}`, name: d.name, weekdays: weekdays[di], exercises };
   });
+
+  // indirect work (e.g. hamstrings in deadlifts and rows) can push a muscle over the weekly max: trim it back
+  const volSettings = { min: rec.min, max: rec.max, sec: settings.sec ?? 0.5, off: settings.off ?? [], customExercises: settings.customExercises };
+  for (let guard = 0; guard < 80; guard++) {
+    const high = weeklyVolume({ days: out, schedule }, volSettings, days)
+      .filter((v) => v.status === 'high').sort((a, b) => (b.sets - rec.max) - (a.sets - rec.max))[0];
+    if (!high) break;
+    const cands = out.flatMap((d) => d.exercises).filter((e) => e.muscle === high.muscle && e.sets > 2).sort((a, b) => b.sets - a.sets);
+    if (!cands.length) break;
+    cands[0].sets -= 1;
+  }
 
   const goalName: Record<Goal, string> = { hyp: '근비대', str: '근력', cut: '감량', fit: '건강' };
   return {

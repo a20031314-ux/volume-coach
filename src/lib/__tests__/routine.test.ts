@@ -82,3 +82,15 @@ describe('which day is today', () => {
     expect(alt != null && r.days[alt].name.startsWith('하체')).toBe(true);
   });
 });
+
+describe('recommendRoutine respects the weekly max', () => {
+  it('keeps every muscle at or under the user max, counting indirect sets', async () => {
+    const { recommendRoutine, weeklyVolume } = await import('../routine');
+    const { DEFAULT_SETTINGS } = await import('../types');
+    const profile = { ...DEFAULT_SETTINGS.profile, years: '3' as const, days: 4, sessionMin: 70 };
+    const settings = { ...DEFAULT_SETTINGS, ability: { ...DEFAULT_SETTINGS.ability, checked: true, bbSquat: 'yes' as const, bbHinge: 'yes' as const, bbPress: 'yes' as const, pullups: '6+' as const } };
+    const r = recommendRoutine({ profile, settings });
+    const vol = weeklyVolume(r, settings, 4);
+    expect(vol.filter((v) => v.status === 'high').map((v) => `${v.name} ${v.sets}`)).toEqual([]);
+  });
+});

@@ -97,10 +97,12 @@ export function analyzeElevation(route: RoutePoint[], alt: (number | null | unde
   const total = dist[dist.length - 1];
   if (total < 50) return null;
 
-  // GPS altitude is noisy (±10 m), so smooth it harder and use a larger hysteresis.
+  // Both sources are noisy at street scale: GPS altitude is off by ±10 m, and the 90 m terrain
+  // model jumps next to rivers, bridges and embankments. Smooth over ~200 m with a 4 m hysteresis
+  // so a flat riverside run doesn't collect phantom climbs.
   const { d, a: raw } = resample(dist, filled, STEP);
-  const a = smooth(raw, source === 'gps' ? 10 : 4);
-  const { gain, loss } = gainLoss(a, source === 'gps' ? 4 : 2);
+  const a = smooth(raw, 10);
+  const { gain, loss } = gainLoss(a, 4);
 
   // grade over 50 m windows
   const W = 5;
