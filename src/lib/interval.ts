@@ -125,9 +125,23 @@ export interface CueInput {
   phasePace: (index: number) => number | null;
   kmAlert: boolean;
   everyMin: number;
+  /** speak pace (default) or speed */
+  unit?: 'pace' | 'speed';
 }
 
 /** Korean spoken pace, e.g. "5분 10초". */
+/** "페이스 5분 28초" or "속도 시속 11.0킬로미터" */
+export function spokenRate(s: number | null, unit: 'pace' | 'speed' = 'pace'): string {
+  return unit === 'speed' ? `속도 ${spokenValue(s, unit)}` : `페이스 ${spokenPace(s)}`;
+}
+
+/** the number alone: "5분 28초" or "시속 11.0킬로미터" */
+export function spokenValue(s: number | null, unit: 'pace' | 'speed' = 'pace'): string {
+  if (unit !== 'speed') return spokenPace(s);
+  if (s == null || !Number.isFinite(s) || s <= 0 || s > 1800) return '측정 중';
+  return `시속 ${(3600 / s).toFixed(1)}킬로미터`;
+}
+
 export function spokenPace(s: number | null): string {
   if (s == null || !Number.isFinite(s) || s > 1800) return '측정 중';
   const m = Math.floor(s / 60);
@@ -150,13 +164,13 @@ export function dueCues(st: CueState, x: CueInput): { say: string[]; next: CueSt
     const pos = phaseAt(x.phases, x.movingS);
     if (pos.index !== st.phaseIdx) {
       const prev = st.phaseIdx >= 0 ? x.phases[st.phaseIdx] : null;
-      if (prev?.kind === 'work') say.push(`${prev.rep}번째 달리기 끝. 평균 페이스 ${spokenPace(x.phasePace(st.phaseIdx))}`);
+      if (prev?.kind === 'work') say.push(`${prev.rep}번째 달리기 끝. 평균 ${spokenRate(x.phasePace(st.phaseIdx), x.unit)}`);
       if (pos.done) say.push(`인터벌 완료. 총 ${spokenKm(x.distanceM)}. 계속 기록 중이에요`);
       else if (pos.phase) {
         const ph = pos.phase;
         const reps = x.phases.filter((p) => p.kind === 'work').length;
         const d = spokenDuration(ph.endS - ph.startS);
-        if (ph.kind === 'work') say.push(`${ph.rep}번째 달리기 시작. ${reps}회 중 ${ph.rep}회, ${d}${x.plan?.targetPaceS ? `, 목표 ${spokenPace(x.plan.targetPaceS)}` : ''}`);
+        if (ph.kind === 'work') say.push(`${ph.rep}번째 달리기 시작. ${reps}회 중 ${ph.rep}회, ${d}${x.plan?.targetPaceS ? `, 목표 ${spokenValue(x.plan.targetPaceS, x.unit)}` : ''}`);
         else say.push(`${PHASE_NAME[ph.kind]} ${d}`);
       }
       next.phaseIdx = pos.index; next.half = false; next.warned = false;
@@ -164,7 +178,7 @@ export function dueCues(st: CueState, x: CueInput): { say: string[]; next: CueSt
       const len = pos.phase.endS - pos.phase.startS;
       if (pos.phase.kind === 'work' && !st.half && pos.elapsedS >= len / 2 && len >= 40) {
         next.half = true;
-        let line = `절반. 현재 페이스 ${spokenPace(x.paceNowS)}`;
+        let line = `절반. 현재 ${spokenRate(x.paceNowS, x.unit)}`;
         const target = x.plan?.targetPaceS;
         if (target && x.paceNowS) {
           const diff = Math.round(x.paceNowS - target);
@@ -184,14 +198,14 @@ export function dueCues(st: CueState, x: CueInput): { say: string[]; next: CueSt
     const km = Math.floor(x.distanceM / 1000);
     if (km > st.km) {
       next.km = km;
-      say.push(`${km}킬로미터. 구간 ${spokenPace(x.lastSplitS)}, 평균 ${spokenPace(x.avgPaceS)}`);
+      say.push(`${km}킬로미터. 구간 ${spokenValue(x.lastSplitS, x.unit)}, 평균 ${spokenValue(x.avgPaceS, x.unit)}`);
     }
   }
   if (x.everyMin > 0) {
     const mark = Math.floor(x.movingS / (x.everyMin * 60));
     if (mark > st.minuteMark) {
       next.minuteMark = mark;
-      say.push(`${mark * x.everyMin}분. ${spokenKm(x.distanceM)}, 현재 페이스 ${spokenPace(x.paceNowS)}`);
+      say.push(`${mark * x.everyMin}분. ${spokenKm(x.distanceM)}, 현재 ${spokenRate(x.paceNowS, x.unit)}`);
     }
   }
   return { say, next };

@@ -111,6 +111,17 @@ export function simplify(points: GpsPoint[], max = 400): GpsPoint[] {
   return out;
 }
 
+export type RateUnit = 'pace' | 'speed';
+
+/** 11.0km/h from seconds per km */
+export const fmtSpeed = (secPerKm: number | null) =>
+  secPerKm == null || !Number.isFinite(secPerKm) || secPerKm <= 0 || secPerKm > 60 * 30 ? '–km/h' : `${(3600 / secPerKm).toFixed(1)}km/h`;
+
+/** pace or speed, whichever the user reads */
+export const fmtRate = (secPerKm: number | null, unit: RateUnit = 'pace') => (unit === 'speed' ? fmtSpeed(secPerKm) : fmtPace(secPerKm));
+
+export const RATE_NAME: Record<RateUnit, string> = { pace: '페이스', speed: '속도' };
+
 export const fmtPace = (secPerKm: number | null) => {
   if (secPerKm == null || !Number.isFinite(secPerKm) || secPerKm > 60 * 30) return "–'––\"";
   const m = Math.floor(secPerKm / 60);

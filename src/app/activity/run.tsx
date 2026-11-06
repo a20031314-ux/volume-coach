@@ -8,12 +8,12 @@ import { PaceTimeline } from '@/components/pace-timeline';
 import { RouteMap } from '@/components/route-map';
 import { TlNode } from '@/components/timeline';
 import { useToast } from '@/components/toast';
-import { Button, Card, ConfirmButton, Row, T } from '@/components/ui';
+import { Button, Card, ConfirmButton, Row, Segmented, T } from '@/components/ui';
 import { usePalette } from '@/constants/theme';
 import { fmt } from '@/lib/dates';
 import { KIND_NAME, gradeAdjustedPace } from '@/lib/elevation';
 import { PHASE_NAME } from '@/lib/interval';
-import { fmtDuration, fmtKm, fmtPace } from '@/lib/run';
+import { RATE_NAME, fmtDuration, fmtKm, fmtRate, type RateUnit } from '@/lib/run';
 import { clock } from '@/lib/timeline';
 import { enrichElevation } from '@/run/elevation-fetch';
 import { useData } from '@/store/store';
@@ -25,6 +25,15 @@ export default function RunDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const r = useData((s) => (id ? s.runs[id] : undefined));
   const removeRun = useData((s) => s.removeRun);
+  const runOpts = useData((s) => s.settings.run);
+  const update = useData((s) => s.updateSettings);
+  const unit: RateUnit = runOpts.unit ?? 'pace';
+  const setUnit = (u: RateUnit) => update({ run: { ...runOpts, unit: u } });
+  const rate = (sec: number | null) => fmtRate(sec, unit);
+  /** how far off the target a work phase was: seconds per km, or km/h */
+  const diff = (sec: number, tgt: number) => unit === 'speed'
+    ? `${3600 / sec - 3600 / tgt >= 0 ? '+' : '−'}${Math.abs(3600 / sec - 3600 / tgt).toFixed(1)}`
+    : `${sec - tgt > 0 ? '+' : '−'}${Math.abs(Math.round(sec - tgt))}초`;
 
   useEffect(() => {
     if (r && r.elev?.source !== 'dem') void enrichElevation(r);
@@ -45,7 +54,7 @@ export default function RunDetail() {
         <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <T v="big" style={{ fontSize: 34, lineHeight: 40 }}>{fmtKm(r.distanceM)}km</T>
           <View style={{ alignItems: 'flex-end' }}>
-            <T v="num" style={{ fontSize: 18 }}>{fmtDuration(r.movingS)} · {fmtPace(r.paceSecPerKm)}</T>
+            <T v="num" style={{ fontSize: 18 }}>{fmtDuration(r.movingS)} · {rate(r.paceSecPerKm)}</T>
             <T v="small">{r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m · ` : ''}{r.kcal}kcal</T>
           </View>
         </Row>
@@ -54,19 +63,20 @@ export default function RunDetail() {
       <Card>
         <TlNode time={clock(r.startedAt)} title="시작" small />
         {r.timeline?.length ? (
-          <TlNode title="시간대별 페이스" sub={phases.length ? '색칠된 곳이 달리기 구간 · 점선은 평균' : '점선은 평균'} color={c.warn}>
-            <PaceTimeline run={r} />
+          <TlNode title={`시간대별 ${RATE_NAME[unit]}`} sub={phases.length ? '색칠된 곳이 달리기 구간 · 점선은 평균' : '점선은 평균'} color={c.warn}>
+            <Segmented options={[{ v: 'pace', n: '페이스 (분/km)' }, { v: 'speed', n: '속도 (km/h)' }]} value={unit} onChange={(v) => v && setUnit(v)} />
+            <PaceTimeline run={r} unit={unit} />
           </TlNode>
         ) : null}
         {phases.map((p, i) => (
           <TlNode key={i} small title={`${PHASE_NAME[p.kind]}${p.kind === 'work' ? ` ${p.rep}` : ''} · ${fmtDuration(p.durS)}`}
             color={p.kind === 'work' ? c.accent : c.ok}
-            right={<T v="num" style={{ fontSize: 15 }}>{p.distanceM}m · {fmtPace(p.paceS)}
-              {p.kind === 'work' && target && p.paceS ? <T v="small"> {p.paceS - target > 0 ? '+' : '−'}{Math.abs(Math.round(p.paceS - target))}초</T> : null}
+            right={<T v="num" style={{ fontSize: 15 }}>{p.distanceM}m · {rate(p.paceS)}
+              {p.kind === 'work' && target && p.paceS ? <T v="small"> {diff(p.paceS, target)}</T> : null}
             </T>} />
         ))}
         {!phases.length && r.splits.length ? r.splits.map((sp) => (
-          <TlNode key={sp.km} small title={`${sp.km}km`} color={c.warn} right={<T v="num" style={{ fontSize: 15 }}>{fmtPace(sp.seconds)}</T>} />
+          <TlNode key={sp.km} small title={`${sp.km}km`} color={c.warn} right={<T v="num" style={{ fontSize: 15 }}>{rate(sp.seconds)}</T>} />
         )) : null}
         <TlNode time={clock(r.endedAt)} title="끝" small last />
       </Card>
@@ -75,7 +85,7 @@ export default function RunDetail() {
         <Disclosure title="1km 구간" meta={`${r.splits.length}개`}>
           {r.splits.map((sp) => (
             <Row key={sp.km} style={{ justifyContent: 'space-between', paddingVertical: 4, borderTopWidth: 1, borderColor: c.line }}>
-              <T v="muted">{sp.km}km</T><T v="num" style={{ fontSize: 15 }}>{fmtPace(sp.seconds)}</T>
+              <T v="muted">{sp.km}km</T><T v="num" style={{ fontSize: 15 }}>{rate(sp.seconds)}</T>
             </Row>
           ))}
         </Disclosure>
@@ -97,8 +107,8 @@ export default function RunDetail() {
           <ElevationChart elev={r.elev} />
           {kind === 'run' && r.elev.gainM >= 10 ? (
             <Row style={{ justifyContent: 'space-between' }}>
-              <T v="muted">경사 보정 페이스</T>
-              <T v="num" style={{ fontSize: 15 }}>{fmtPace(gradeAdjustedPace(r.movingS, r.elev))}</T>
+              <T v="muted">경사 보정 {RATE_NAME[unit]}</T>
+              <T v="num" style={{ fontSize: 15 }}>{rate(gradeAdjustedPace(r.movingS, r.elev))}</T>
             </Row>
           ) : null}
           {r.elev.climbs.map((cl, i) => (

@@ -1,14 +1,14 @@
 import Svg, { Line, Polyline, Rect, Text as SvgText } from 'react-native-svg';
 
 import { usePalette } from '@/constants/theme';
-import { fmtPace } from '@/lib/run';
+import { fmtPace, type RateUnit } from '@/lib/run';
 import type { Run } from '@/lib/types';
 
 /**
- * Speed over the run's moving time. Up = faster; the axis is labelled in pace (min/km) because
- * that's how runners read it. Interval work phases are shaded.
+ * Speed over the run's moving time. Up = faster either way; the axis is labelled in pace (min/km)
+ * or speed (km/h). Interval work phases are shaded.
  */
-export function PaceTimeline({ run, height = 170 }: { run: Pick<Run, 'timeline' | 'phases' | 'movingS' | 'paceSecPerKm'>; height?: number }) {
+export function PaceTimeline({ run, height = 170, unit = 'pace' }: { run: Pick<Run, 'timeline' | 'phases' | 'movingS' | 'paceSecPerKm'>; height?: number; unit?: RateUnit }) {
   const c = usePalette();
   const tl = (run.timeline ?? []).filter(([, v]) => v > 0.3);
   if (tl.length < 2) return null;
@@ -30,7 +30,7 @@ export function PaceTimeline({ run, height = 170 }: { run: Pick<Run, 'timeline' 
   for (let m = minuteStep; m * 60 < total; m += minuteStep) xTicks.push(m * 60);
 
   return (
-    <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} accessibilityLabel="시간대별 페이스 그래프">
+    <Svg width="100%" height={H} viewBox={`0 0 ${W} ${H}`} accessibilityLabel={unit === 'speed' ? '시간대별 속도 그래프' : '시간대별 페이스 그래프'}>
       {(run.phases ?? []).reduce<{ start: number; rects: { s: number; e: number }[] }>((acc, p) => {
         const s = acc.start, e = acc.start + p.durS;
         if (p.kind === 'work') acc.rects.push({ s, e });
@@ -43,7 +43,7 @@ export function PaceTimeline({ run, height = 170 }: { run: Pick<Run, 'timeline' 
         <Line key={i} x1={L} x2={W - R} y1={y(v)} y2={y(v)} stroke={c.line} strokeWidth={1} />
       ))}
       {ticks.map((v, i) => (
-        <SvgText key={`t${i}`} x={L - 4} y={y(v) + 4} fontSize={10} fill={c.muted} textAnchor="end">{fmtPace(1000 / v)}</SvgText>
+        <SvgText key={`t${i}`} x={L - 4} y={y(v) + 4} fontSize={10} fill={c.muted} textAnchor="end">{unit === 'speed' ? (v * 3.6).toFixed(1) : fmtPace(1000 / v)}</SvgText>
       ))}
       {xTicks.map((t) => (
         <SvgText key={t} x={x(t)} y={H - 6} fontSize={10} fill={c.muted} textAnchor="middle">{t / 60}분</SvgText>

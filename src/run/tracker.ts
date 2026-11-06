@@ -18,7 +18,7 @@ import { createJSONStorage, persist, type StateStorage } from 'zustand/middlewar
 import { iso } from '@/lib/dates';
 import {
   PHASE_NAME, bucketTimeline, buildPhases, dopplerSpeed, dueCues, initialCues, paceFromSpeed, phaseStats, smoothSpeed,
-  spokenPace, type CueState, type IntervalPlan, type Phase, type SpeedSample,
+  spokenPace, spokenRate, type CueState, type IntervalPlan, type Phase, type SpeedSample,
 } from '@/lib/interval';
 import { body } from '@/lib/profile';
 import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/lib/elevation';
@@ -37,6 +37,7 @@ export interface RunSetup {
   voice: boolean;
   kmAlert: boolean;
   everyMin: number;
+  unit?: 'pace' | 'speed';
 }
 
 interface ActiveRun extends RunSetup {
@@ -173,6 +174,7 @@ export function tickCues(now = Date.now()) {
     phasePace: (i) => (phases ? phaseStats(phases, s.points)[i]?.paceS ?? null : null),
     kmAlert: s.kmAlert,
     everyMin: s.everyMin,
+    unit: s.unit,
   });
   if (next !== s.cues && JSON.stringify(next) !== JSON.stringify(s.cues)) useRun.setState({ cues: next });
   if (s.voice) speak(say);
@@ -351,7 +353,7 @@ export async function finishRun(): Promise<number | null> {
   useRun.setState({ ...idle });
   if (sum.distanceM < 50) return null;
   const pace = movingS / (sum.distanceM / 1000);
-  if (s.voice) speak([`${KIND_NAME[s.kind ?? 'run']} 끝. 총 ${(sum.distanceM / 1000).toFixed(2)}킬로미터, 평균 페이스 ${spokenPace(pace)}`]);
+  if (s.voice) speak([`${KIND_NAME[s.kind ?? 'run']} 끝. 총 ${(sum.distanceM / 1000).toFixed(2)}킬로미터, 평균 ${spokenRate(pace, s.unit)}`]);
   const data = useData.getState();
   const b = body(data.settings.profile, live(data.bodyComps));
   const kind = s.kind ?? 'run';

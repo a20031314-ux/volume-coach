@@ -91,6 +91,8 @@ export interface RunOptions {
   /** announce every N minutes (0 = off) */
   everyMin: number;
   mode: 'free' | 'interval';
+  /** show pace (min/km, default) or speed (km/h) */
+  unit?: 'pace' | 'speed';
   /** seconds counted down before recording starts (0 = start immediately) */
   countdown?: number;
   /** what to record; interval mode applies to running only */

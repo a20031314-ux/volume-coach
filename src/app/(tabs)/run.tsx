@@ -13,7 +13,7 @@ import { fmt } from '@/lib/dates';
 import { PHASE_NAME, buildPhases, phaseAt, planTotalS, type PhaseKind } from '@/lib/interval';
 import { body } from '@/lib/profile';
 import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/lib/elevation';
-import { fmtDuration, fmtKm, fmtPace } from '@/lib/run';
+import { RATE_NAME, fmtDuration, fmtKm, fmtPace, fmtRate } from '@/lib/run';
 import type { IntervalPlanData, RunOptions } from '@/lib/types';
 import {
   discardRun, elapsedS, finishRun, isTrackingAvailable, livePace, openSettings, pauseRun, phasesOf, reconcileRun,
@@ -88,6 +88,7 @@ export default function RunScreen() {
     voice: opts.voice,
     kmAlert: interval ? false : opts.kmAlert,
     everyMin: interval ? 0 : opts.everyMin,
+    unit: opts.unit ?? 'pace',
   }));
   const countdown = opts.countdown ?? 3;
   const start = async () => {
@@ -130,7 +131,7 @@ export default function RunScreen() {
               <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
                 <View style={{ flexShrink: 1 }}>
                   <T v="title">{fmtDuration(opts.interval.workS)} / {fmtDuration(opts.interval.restS)} × {opts.interval.repeats}</T>
-                  <T v="small">총 {fmtDuration(planTotalS(planPhases))}{opts.interval.targetPaceS ? ` · 목표 ${fmtPace(opts.interval.targetPaceS)}` : ''}</T>
+                  <T v="small">총 {fmtDuration(planTotalS(planPhases))}{opts.interval.targetPaceS ? ` · 목표 ${fmtRate(opts.interval.targetPaceS, opts.unit)}` : ''}</T>
                 </View>
                 <Button label="편집" kind="ghost" onPress={() => setEditing(true)} />
               </Row>
@@ -186,6 +187,9 @@ export default function RunScreen() {
       </Sheet>
 
       <Sheet open={voiceSheet} title="시작 옵션" onClose={() => setVoiceSheet(false)}>
+        <T v="muted">표시 단위</T>
+        <Segmented options={[{ v: 'pace', n: '페이스 (분/km)' }, { v: 'speed', n: '속도 (km/h)' }]} value={opts.unit ?? 'pace'}
+          onChange={(v) => v && setOpts({ unit: v })} />
         <T v="muted">카운트다운</T>
         <Segmented options={[{ v: '0', n: '없음' }, { v: '3', n: '3초' }, { v: '5', n: '5초' }, { v: '10', n: '10초' }]} value={String(countdown)}
           onChange={(v) => v && setOpts({ countdown: Number(v) })} />
@@ -206,7 +210,7 @@ export default function RunScreen() {
                 <T v="title" style={{ color: phaseColor(pos.phase.kind) }}>
                   {PHASE_NAME[pos.phase.kind]}{pos.phase.kind === 'work' ? ` ${pos.phase.rep}/${phases!.filter((p) => p.kind === 'work').length}` : ''}
                 </T>
-                {run.plan?.targetPaceS && pos.phase.kind === 'work' ? <Chip label={`목표 ${fmtPace(run.plan.targetPaceS)}`} /> : null}
+                {run.plan?.targetPaceS && pos.phase.kind === 'work' ? <Chip label={`목표 ${fmtRate(run.plan.targetPaceS, opts.unit)}`} /> : null}
               </Row>
               <T v="big" style={{ fontSize: 56, lineHeight: 62, color: phaseColor(pos.phase.kind) }}>{fmtDuration(Math.ceil(pos.remainingS))}</T>
               <Meter pct={(pos.elapsedS / (pos.phase.endS - pos.phase.startS)) * 100} color={phaseColor(pos.phase.kind)} height={6} />
@@ -224,8 +228,8 @@ export default function RunScreen() {
         </View>
         <Row style={{ justifyContent: 'space-around' }}>
           <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtDuration(secs)}</T><T v="small">시간</T></View>
-          <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtPace(avg)}</T><T v="small">평균 페이스</T></View>
-          <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtPace(curPace)}</T><T v="small">현재 페이스</T></View>
+          <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtRate(avg, opts.unit)}</T><T v="small">평균 {RATE_NAME[opts.unit ?? 'pace']}</T></View>
+          <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtRate(curPace, opts.unit)}</T><T v="small">현재 {RATE_NAME[opts.unit ?? 'pace']}</T></View>
           <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{activityKcal(run.kind ?? 'run', run.distanceM, weight)}</T><T v="small">kcal</T></View>
         </Row>
         {run.status === 'paused' ? <T v="muted" style={{ textAlign: 'center' }}>일시정지 중 · 이 동안의 거리와 시간은 빼고 계산해요</T> : null}
@@ -264,7 +268,7 @@ export default function RunScreen() {
           {runs.slice(0, 10).map((r, i, arr) => (
             <TlNode key={r.id} time={fmt(r.date).replace(/\s*\(.*\)/, '')} color={(r.kind ?? 'run') === 'run' ? c.warn : c.ok}
               title={`${KIND_NAME[r.kind ?? 'run']}${r.intervalPlan ? ' · 인터벌' : ''} · ${fmtKm(r.distanceM)}km`}
-              sub={[fmtDuration(r.movingS), fmtPace(r.paceSecPerKm), r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · ')}
+              sub={[fmtDuration(r.movingS), fmtRate(r.paceSecPerKm, opts.unit), r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · ')}
               onPress={() => router.push({ pathname: '/activity/run', params: { id: r.id } })} last={i === arr.length - 1} />
           ))}
         </View>

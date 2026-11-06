@@ -86,3 +86,14 @@ describe('voice cues', () => {
     expect(spokenPace(325)).toBe('5분 25초');
   });
 });
+
+describe('speed unit', () => {
+  it('speaks km/h instead of pace', async () => {
+    const { spokenRate, spokenValue } = await import('../interval');
+    expect(spokenRate(328, 'speed')).toBe('속도 시속 11.0킬로미터');
+    expect(spokenValue(328)).toBe('5분 28초');
+    const { fmtRate } = await import('../run');
+    expect(fmtRate(328, 'speed')).toBe('11.0km/h');
+    expect(fmtRate(328)).toBe('5\'28"');
+  });
+});
