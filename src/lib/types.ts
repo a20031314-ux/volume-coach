@@ -1,4 +1,5 @@
 import type { ActivityKind, Elevation, RoutePoint } from './elevation';
+import type { StrengthProgram } from './progression';
 import type { Weather } from './weather';
 export type MuscleKey =
   | 'chest' | 'back' | 'shoulder' | 'quad' | 'ham' | 'bi' | 'tri' | 'calf' | 'abs';
@@ -157,6 +158,8 @@ export interface SessionExercise {
   doneSets?: number | null;
   /** WorkoutLog this exercise writes to */
   logId: string;
+  /** prescribed weight × reps for each set (strength program, or a suggestion from estimated 1RM) */
+  target?: { kg: number; reps: number; program?: boolean } | null;
 }
 
 /** A workout from 시작 to 끝, with a timeline per exercise and per set. */
@@ -278,6 +281,10 @@ export interface Settings {
   activeRoutineId: string | null;
   /** first-run setup done (or skipped) */
   onboarded?: boolean;
+  /** active strength program for one main lift */
+  program?: StrengthProgram | null;
+  /** 1RMs the user typed in, by exercise (override estimates from logs) */
+  oneRm?: Partial<Record<string, number>>;
   updatedAt: number;
 }
 

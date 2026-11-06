@@ -10,7 +10,7 @@ export function restSeconds(exercise: string, goal: Goal = 'hyp'): number {
   return heavy ? 150 : 90;
 }
 
-export interface PlannedExercise { name: string; muscle: MuscleKey; sets: number }
+export interface PlannedExercise { name: string; muscle: MuscleKey; sets: number; target?: SessionExercise['target'] }
 
 export function newSession(
   plan: PlannedExercise[], detail: SessionDetail, now: number, ids: { session: string; log: () => string }, date: string,
@@ -20,7 +20,7 @@ export function newSession(
     exercises: plan.map((p, i) => ({
       key: `${i}-${p.name}`, name: p.name, muscle: p.muscle, planned: Math.max(1, p.sets),
       status: i === 0 ? 'active' : 'pending', startedAt: i === 0 ? now : null, endedAt: null,
-      sets: [], doneSets: null, logId: ids.log(),
+      sets: [], doneSets: null, logId: ids.log(), target: p.target ?? null,
     })),
   };
 }
@@ -76,6 +76,8 @@ export function lastPerformance(name: string, sessions: Session[], logs: Workout
 export function prefill(ex: SessionExercise, last: LastPerformance | null): { kg: number | null; reps: number | null } {
   const mine = ex.sets[ex.sets.length - 1];
   if (mine) return { kg: mine.kg ?? null, reps: mine.reps ?? null };
+  // a program prescription beats last time; a plain suggestion only fills in when there's no history
+  if (ex.target && (ex.target.program || !last)) return { kg: ex.target.kg, reps: ex.target.reps };
   const prev = last?.sets[0];
   if (prev) return { kg: prev.kg ?? null, reps: prev.reps ?? null };
   const firstReps = Number(String(last?.reps ?? '').split('/')[0]);

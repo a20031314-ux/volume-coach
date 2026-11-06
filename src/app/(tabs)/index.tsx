@@ -15,10 +15,14 @@ import { useNow } from '@/hooks/use-now';
 import { abilityHints, knownExercises } from '@/lib/ability';
 import { buildPlan, deloadHint, suggestExercises } from '@/lib/coach';
 import { dow, fmt } from '@/lib/dates';
-import { MUSCLES } from '@/lib/exercises';
+import { MUSCLES, library } from '@/lib/exercises';
 import { repRange } from '@/lib/profile';
+import { SESSION_NAME } from '@/lib/progression';
+import type { PlannedExercise } from '@/lib/session';
+import { SHORT, repsFrom, suggestWeight, type MainLift } from '@/lib/strength';
 import { selectActiveSession, startSession } from '@/store/session-actions';
 import { live, useData } from '@/store/store';
+import { useProgram, useStrengthTable } from '@/store/strength';
 
 /** short body-region names for the title */
 const GROUP: Record<(typeof MUSCLES)[number]['k'], string> = {
@@ -45,6 +49,8 @@ export default function Today() {
   const [sheet, setSheet] = useState(false);
   const [dayOverride, setDayOverride] = useState<number | null>(null);
 
+  const strength = useStrengthTable();
+  const prog = useProgram();
   const ck = settings.checkin;
   const rd = result.readiness;
   const plan = useMemo(() => buildPlan(result, live(logs)), [result, logs]);
@@ -58,7 +64,7 @@ export default function Today() {
 
   /* ---------- what to do today ---------- */
   let title: string, items: PlanItem[], notice: Parameters<typeof PlanView>[0]['notice'] = null;
-  let startList: { name: string; muscle: (typeof MUSCLES)[number]['k']; sets: number }[];
+  let startList: PlannedExercise[];
   if (routine) {
     const d = rp.day;
     title = d ? d.name : '쉬는 날';
@@ -85,6 +91,28 @@ export default function Today() {
     })));
     startList = items.map((it) => ({ name: it.name, muscle: it.muscle, sets: it.sets }));
   }
+  // weights: a program prescription for the program lift, otherwise a suggestion from estimated 1RM
+  items = items.map((it) => {
+    const reps = repsFrom(repRange(it.name, settings.profile));
+    const sug = suggestWeight(it.name, reps, strength, settings.customExercises, settings.oneRm);
+    return sug ? { ...it, detail: `권장 ${sug.kg}kg × ${reps}${sug.source === 'derived' ? ` (${SHORT[sug.from as MainLift]} 기준)` : ''} · ${it.detail}`, target: { kg: sug.kg, reps } } : it;
+  });
+  if (prog?.next && prog.due && !running) {
+    const nx = prog.next;
+    const lib = library(settings.customExercises).find((e) => e.n === prog.program.lift);
+    const progItem: PlanItem = {
+      key: 'program', name: prog.program.lift, muscle: lib?.m ?? 'chest', sets: nx.sets,
+      recovery: result.stats.find((x) => x.k === (lib?.m ?? 'chest'))?.recPre ?? 100, tag: '프로그램',
+      detail: `${nx.kg}kg × ${nx.reps} · ${nx.sets}세트 · ${nx.session.week}주차 ${SESSION_NAME[nx.session.kind]}`,
+      target: { kg: nx.kg, reps: nx.reps, program: true },
+      onLog: () => setDraft({ exercise: prog.program.lift, muscle: lib?.m ?? 'chest', sets: nx.sets }),
+    };
+    const at = items.findIndex((it) => it.name === prog.program.lift);
+    // already in today's plan: use the prescription; otherwise add it only if that muscle has recovered
+    if (at >= 0) items = items.map((it, i) => (i === at ? { ...progItem, key: it.key } : it));
+    else if (progItem.recovery >= settings.ready) items = [progItem, ...items];
+  }
+  startList = items.map((it) => ({ name: it.name, muscle: it.muscle, sets: it.sets, target: it.target ?? null }));
   const totalSets = items.reduce((a, it) => a + it.sets, 0);
   const meta = [
     routine ? rp.label : null,

@@ -204,6 +204,9 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
           <Chip label={setMode ? `${n} / ${ex.planned}세트` : `${ex.planned}세트 예정`} tone="accent" />
         </Row>
         <T v="small">{MUSCLE_NAME[ex.muscle]} · {repRange(ex.name, profile)}</T>
+        {ex.target ? (
+          <T v="small" style={{ color: c.accent }}>{ex.target.program ? '프로그램' : '권장'} {ex.target.kg}kg × {ex.target.reps}{ex.target.program ? ` · ${ex.planned}세트` : ''}</T>
+        ) : null}
         {lastPerf ? (
           <T v="small">지난번 {lastPerf.date.slice(5).replace('-', '/')} · {lastPerf.sets.length
             ? lastPerf.sets.map((s) => (s.kg ? `${s.kg}×${s.reps ?? '-'}` : `${s.reps ?? '-'}회`)).join(' · ')

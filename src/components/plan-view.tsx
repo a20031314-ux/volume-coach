@@ -17,6 +17,8 @@ export interface PlanItem {
   /** short tag shown next to the name, e.g. 가볍게 */
   tag?: string;
   detail: string;
+  /** weight × reps to start the session with */
+  target?: { kg: number; reps: number; program?: boolean } | null;
   onSwap?: () => void;
   onLog?: () => void;
 }
@@ -64,7 +66,10 @@ export function PlanView({ title, meta, notice, start, items, ready, empty }: {
                     <ExName name={it.name} />
                     {expanded ? null : <T v="small">{MUSCLE_NAME[it.muscle]}{it.tag ? ` · ${it.tag}` : ''}</T>}
                   </View>
-                  <T v="num" style={{ fontSize: 17 }}>{it.sets}<T v="small">세트</T></T>
+                  <View style={{ alignItems: 'flex-end' }}>
+                    <T v="num" style={{ fontSize: 17 }}>{it.sets}<T v="small">세트</T></T>
+                    {it.target ? <T v="small" style={it.target.program ? { color: c.accent } : undefined}>{it.target.kg}kg × {it.target.reps}</T> : null}
+                  </View>
                 </Pressable>
                 {expanded ? (
                   <View style={{ paddingHorizontal: Space.lg, paddingBottom: Space.md, gap: Space.sm }}>
