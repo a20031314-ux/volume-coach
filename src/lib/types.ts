@@ -243,6 +243,8 @@ export interface Settings {
   /** 자율형: rules + daily recommendation · 루틴형: follow a routine */
   planMode: 'auto' | 'routine';
   activeRoutineId: string | null;
+  /** first-run setup done (or skipped) */
+  onboarded?: boolean;
   updatedAt: number;
 }
 

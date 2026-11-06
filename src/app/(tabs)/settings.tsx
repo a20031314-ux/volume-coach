@@ -55,6 +55,7 @@ export default function SettingsScreen() {
       </Group>
 
       <Group title="앱">
+        <ListRow label="처음 설정 다시 하기" onPress={() => router.push('/setup')} />
         <ListRow label="앱 정보" value={Constants.expoConfig?.version} onPress={() => router.push('/prefs/app')} last />
       </Group>
 

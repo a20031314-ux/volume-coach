@@ -1,9 +1,13 @@
+import { Redirect } from 'expo-router';
 import { NativeTabs } from 'expo-router/native-tabs';
 
 import { usePalette } from '@/constants/theme';
+import { useData } from '@/store/store';
 
 export default function TabLayout() {
   const c = usePalette();
+  const onboarded = useData((s) => s.settings.onboarded);
+  if (!onboarded) return <Redirect href="/setup" />;
   return (
     <NativeTabs backgroundColor={c.surface} indicatorColor={c.accentSoft} labelStyle={{ selected: { color: c.accent } }} tintColor={c.accent}>
       <NativeTabs.Trigger name="index">
