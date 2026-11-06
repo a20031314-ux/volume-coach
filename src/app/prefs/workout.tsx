@@ -30,9 +30,10 @@ export default function WorkoutPrefs() {
       ) : null}
 
       <Card>
-        <Row gap={Space.md}>
-          <NumField label="자동 종료 (분, 0 = 끔)" value={s.session.autoEndMin} onCommit={(v) => v != null && set({ autoEndMin: v })} />
-        </Row>
+        <T v="muted">자동 종료</T>
+        <Segmented options={[{ v: '0', n: '끔' }, { v: '60', n: '60분' }, { v: '90', n: '90분' }, { v: '120', n: '120분' }]}
+          value={String(s.session.autoEndMin)} onChange={(v) => v != null && set({ autoEndMin: Number(v), autoEndChosen: true })} />
+        {s.session.autoEndMin ? <T v="small">마지막 체크 후 {s.session.autoEndMin}분 동안 입력이 없으면 그 시각으로 운동을 끝내요.</T> : null}
       </Card>
     </Page>
   );

@@ -150,8 +150,10 @@ export interface SessionOptions {
   setRpe: boolean;
   /** count down rest between sets and notify when it's over */
   restTimer: boolean;
-  /** end a forgotten session after this many idle minutes */
+  /** end a forgotten session after this many idle minutes (0 = off, the default) */
   autoEndMin: number;
+  /** set once the user picks a value; the old default (90) is reset to off until then */
+  autoEndChosen?: boolean;
 }
 
 export type PainMove = 'overhead' | 'deepKnee' | 'spine' | 'wrist' | 'deepShoulder';
@@ -248,7 +250,7 @@ export const DEFAULT_SETTINGS: Settings = {
   min: 12, max: 18, minEx: 2, gap: 1, cap: 24, mcap: 10, weekStart: 1, sec: 0.5,
   ready: 70, deload: false, off: [], customExercises: [], foods: [],
   profile: { goal: 'hyp', act: '1' },
-  session: { detail: 'exercise', setInputs: true, setRpe: false, restTimer: true, autoEndMin: 90 },
+  session: { detail: 'exercise', setInputs: true, setRpe: false, restTimer: true, autoEndMin: 0 },
   checkin: { sleep: true, energy: true, sore: true, systemic: true },
   ability: { checked: false, pullups: 'unknown', pushups: 'unknown', dips: 'unknown', bbSquat: 'unknown', bbHinge: 'unknown', bbPress: 'unknown', pain: [] },
   exercisePrefs: {},

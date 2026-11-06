@@ -58,12 +58,19 @@ const empty = {
   settings: DEFAULT_SETTINGS, dirty: [] as string[], pulledAt: null as string | null,
 };
 
+/** Auto-end used to default to 90 min; it is now off unless the user turned it on. */
+function sessionDefaults(p: Partial<Settings['session']> | undefined): Settings['session'] {
+  const out = { ...DEFAULT_SETTINGS.session, ...(p ?? {}) };
+  if (!out.autoEndChosen && out.autoEndMin === 90) out.autoEndMin = 0;
+  return out;
+}
+
 /** Fill in fields added in later app versions. */
 function withDefaults(p: Partial<Settings> | undefined): Settings {
   return {
     ...DEFAULT_SETTINGS, ...(p ?? {}),
     profile: { ...DEFAULT_SETTINGS.profile, ...(p?.profile ?? {}) },
-    session: { ...DEFAULT_SETTINGS.session, ...(p?.session ?? {}) },
+    session: sessionDefaults(p?.session),
     checkin: { ...DEFAULT_SETTINGS.checkin, ...(p?.checkin ?? {}) },
     ability: { ...DEFAULT_SETTINGS.ability, ...(p?.ability ?? {}) },
     exercisePrefs: p?.exercisePrefs ?? {},
