@@ -1,5 +1,6 @@
 import {
   SdkAvailabilityStatus,
+  aggregateGroupByDuration,
   aggregateRecord,
   getGrantedPermissions,
   getSdkStatus,
@@ -10,6 +11,7 @@ import {
 import { Linking } from 'react-native';
 
 import type { DaySteps } from '@/lib/activity';
+import type { StepBucket } from '@/lib/day-steps';
 import { parse } from '@/lib/dates';
 
 export type HealthStatus = 'ok' | 'unavailable' | 'needsInstall';
@@ -67,5 +69,37 @@ export function openHealthSettings(): void {
     openHealthConnectSettings();
   } catch {
     Linking.openSettings();
+  }
+}
+
+export async function readDayBuckets(date: string, minutes = 15): Promise<StepBucket[] | null> {
+  const start = parse(date);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  const timeRangeFilter = { operator: 'between' as const, startTime: start.toISOString(), endTime: end.toISOString() };
+  const timeRangeSlicer = { duration: 'MINUTES' as const, length: minutes };
+  try {
+    if (!(await init())) return null;
+    const granted = await getGrantedPermissions();
+    const has = (t: string) => granted.some((p) => 'recordType' in p && p.recordType === t && p.accessType === 'read');
+    if (!has('Steps')) return null;
+    const [s, d] = await Promise.all([
+      aggregateGroupByDuration({ recordType: 'Steps', timeRangeFilter, timeRangeSlicer }),
+      has('Distance') ? aggregateGroupByDuration({ recordType: 'Distance', timeRangeFilter, timeRangeSlicer }) : [],
+    ]);
+    const by = new Map<number, StepBucket>();
+    for (const x of s) {
+      const k = new Date(x.startTime).getTime();
+      by.set(k, { startMs: k, minutes, steps: x.result.COUNT_TOTAL ?? 0, meters: 0 });
+    }
+    for (const x of d) {
+      const k = new Date(x.startTime).getTime();
+      const b = by.get(k) ?? { startMs: k, minutes, steps: 0, meters: 0 };
+      b.meters = x.result.DISTANCE?.inMeters ?? 0;
+      by.set(k, b);
+    }
+    return [...by.values()].filter((b) => b.steps > 0 || b.meters > 0).sort((a, b) => a.startMs - b.startMs);
+  } catch {
+    return null;
   }
 }

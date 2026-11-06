@@ -6,12 +6,14 @@ import { Platform, View } from 'react-native';
 
 import { useDayActivity } from '@/components/day-activity';
 import { Sheet } from '@/components/layout';
+import { NowSpeed } from '@/components/now-speed';
+import { StepsChart } from '@/components/steps-chart';
 import { DayStrip, TlNode } from '@/components/timeline';
 import { useToast } from '@/components/toast';
 import { Button, Card, DayNav, Field, NumField, Pills, Row, Screen, Segmented, Stepper, T } from '@/components/ui';
 import { WeekView } from '@/components/week-view';
 import { Space, usePalette } from '@/constants/theme';
-import { useHealth } from '@/health/use-steps';
+import { useDayBuckets, useHealth } from '@/health/use-steps';
 import { knownExercises, pickable } from '@/lib/ability';
 import { activityLine } from '@/lib/activity';
 import { addDays, fmt, parse, today } from '@/lib/dates';
@@ -20,7 +22,6 @@ import { MUSCLES, MUSCLE_NAME, library } from '@/lib/exercises';
 import { repRange } from '@/lib/profile';
 import { dayTimeline, span, type TimelineItem, type TimelineKind } from '@/lib/timeline';
 import type { MuscleKey } from '@/lib/types';
-import { useMove } from '@/move/tracker';
 import { useDayMove } from '@/move/use-move';
 import { useRun } from '@/run/tracker';
 import { live, useData } from '@/store/store';
@@ -48,8 +49,8 @@ export default function Log() {
   const activity = useDayActivity(date);
   const run = useRun();
   const health = useHealth((s) => s.enabled);
-  const moving = useMove((s) => s.enabled);
   const clockNow = useNow(60e3);
+  const buckets = useDayBuckets(date, clockNow.getTime());
 
   const items = useMemo(() => dayTimeline(date, {
     logs: live(logsT), sessions: live(sessionsT), runs: live(runsT), walks: move.segments,
@@ -87,6 +88,11 @@ export default function Log() {
             {activity.kcal ? <T v="num" style={{ fontSize: 15 }}>{activity.activeMin}분 · {activity.kcal}kcal</T> : null}
           </Row>
           <DayStrip blocks={blocks} startMs={dayStart} />
+          {buckets && buckets.length ? (
+            <StepsChart buckets={buckets} dayStart={dayStart}
+              tracked={live(runsT).filter((r) => r.date === date).map((r) => [r.startedAt, r.endedAt] as [number, number])} />
+          ) : null}
+          {isToday ? <NowSpeed /> : null}
         </Card>
 
         <View>
@@ -101,8 +107,8 @@ export default function Log() {
         </View>
 
         <Button label="+ 웨이트 기록" onPress={() => setAdding('chest')} />
-        {!health && !moving && Platform.OS !== 'web' ? (
-          <Button label="걷기도 기록하기" kind="ghost" onPress={() => router.push('/prefs/health')} style={{ alignSelf: 'center' }} />
+        {!health && Platform.OS !== 'web' ? (
+          <Button label="걸음 수 연결하기" kind="ghost" onPress={() => router.push('/prefs/health')} style={{ alignSelf: 'center' }} />
         ) : null}
       </>)}
 

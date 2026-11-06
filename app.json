@@ -32,6 +32,11 @@
       "permissions": [
         "android.permission.health.READ_STEPS",
         "android.permission.health.READ_DISTANCE"
+      ],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "web": {
@@ -51,10 +56,10 @@
       [
         "expo-location",
         {
-          "locationWhenInUsePermission": "러닝 거리와 경로를 기록하려면 위치 정보가 필요해요.",
-          "locationAlwaysAndWhenInUsePermission": "화면을 끄고 달려도 러닝 거리를 계속 기록하려면 위치 정보가 필요해요.",
+          "locationWhenInUsePermission": "러닝·걷기 기록 중 거리와 경로를 재려면 위치 정보가 필요해요. 기록을 시작한 동안에만 사용해요.",
+          "locationAlwaysAndWhenInUsePermission": "기록을 시작한 동안 화면을 꺼도 거리를 계속 재려면 위치 정보가 필요해요.",
           "isIosBackgroundLocationEnabled": true,
-          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": false,
           "isAndroidForegroundServiceEnabled": true
         }
       ],

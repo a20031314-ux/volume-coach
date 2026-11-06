@@ -96,14 +96,13 @@ export async function setMoveEnabled(on: boolean): Promise<MoveResult> {
   return { ok: true };
 }
 
-/** On launch: restart recording if it's on but the OS stopped it (reboot, app update). */
+/**
+ * On launch. All-day recording is switched off for now (store policy on background location),
+ * so anyone who had it on is turned off and the task stopped. History stays until cleared.
+ */
 export async function resumeMove() {
   if (Platform.OS === 'web' || !useMove.getState().enabled) return;
-  try {
-    const bg = await Location.getBackgroundPermissionsAsync();
-    if (bg.status !== 'granted') return;
-    if (!(await Location.hasStartedLocationUpdatesAsync(MOVE_TASK))) await startUpdates();
-  } catch { /* try again next launch */ }
+  await setMoveEnabled(false);
 }
 
 export function clearMoveHistory() {

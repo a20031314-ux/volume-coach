@@ -1,5 +1,6 @@
 // Fallback (web): no health store. Platform files steps.ios.ts / steps.android.ts replace this.
 import type { DaySteps } from '@/lib/activity';
+import type { StepBucket } from '@/lib/day-steps';
 
 export type HealthStatus = 'ok' | 'unavailable' | 'needsInstall';
 
@@ -22,3 +23,8 @@ export async function readDaySteps(_date: string): Promise<DaySteps | null> {
 
 /** Opens the store's own permission screen, where access can be changed. */
 export function openHealthSettings(): void {}
+
+/** Steps and distance in `minutes`-long slices of a day; null if unreadable. */
+export async function readDayBuckets(_date: string, _minutes = 15): Promise<StepBucket[] | null> {
+  return null;
+}

@@ -289,20 +289,8 @@ export async function prepareRun(): Promise<StartResult & { asked?: boolean }> {
       return { ok: false, message: '거리를 재려면 위치 권한이 필요해요. 설정에서 위치를 허용해 주세요.', openSettings: !fg.canAskAgain };
     }
   }
-  let bg = await Location.getBackgroundPermissionsAsync();
-  if (bg.status !== 'granted') {
-    asked = true;
-    bg = await Location.requestBackgroundPermissionsAsync();
-    if (bg.status !== 'granted') {
-      return {
-        ok: false,
-        message: Platform.OS === 'ios'
-          ? '화면을 꺼도 기록하려면 위치 권한을 "항상"으로 바꿔 주세요.'
-          : '화면을 꺼도 기록하려면 위치 권한을 "항상 허용"으로 바꿔 주세요.',
-        openSettings: true,
-      };
-    }
-  }
+  // No "always" permission: recording runs as a foreground service (Android) / background
+  // location mode (iOS) started while the app is open, which only needs while-in-use access.
   return { ok: true, asked };
 }
 
