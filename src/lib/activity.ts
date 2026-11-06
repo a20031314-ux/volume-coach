@@ -8,6 +8,8 @@ export interface DayActivity {
   run: { km: number; minutes: number; kcal: number; count: number };
   /** walks and hikes recorded with GPS */
   outdoor: { km: number; minutes: number; kcal: number; count: number; gainM: number };
+  /** rides and time-based cardio (swimming, stairs, …) */
+  cardio: { km: number; minutes: number; kcal: number; count: number };
   /** from the health store (steps) or, without it, from all-day movement tracking (no steps) */
   walk: { steps: number | null; km: number; kcal: number } | null;
   /** minutes of deliberate exercise (lifting, running, recorded walks and hikes) */
@@ -51,8 +53,10 @@ export function dayActivity(
     kcal: rs.reduce((a, r) => a + r.kcal, 0),
   });
   const running = runs.filter((r) => (r.kind ?? 'run') === 'run');
-  const walks = runs.filter((r) => (r.kind ?? 'run') !== 'run');
-  const R = sum(running), O = sum(walks);
+  const walks = runs.filter((r) => r.kind === 'walk' || r.kind === 'hike');
+  const other = runs.filter((r) => r.kind === 'ride' || r.kind === 'other');
+  const R = sum(running), O = sum(walks), X = sum(other);
+  // health stores count walking/running distance; rides and indoor cardio aren't in it
   const trackedM = R.m + O.m;
 
   let walk: DayActivity['walk'] = null;
@@ -69,9 +73,10 @@ export function dayActivity(
     lift: { sets, minutes: liftMin, kcal: liftKcal },
     run: { km: Math.round(R.m / 100) / 10, minutes: R.min, kcal: R.kcal, count: running.length },
     outdoor: { km: Math.round(O.m / 100) / 10, minutes: O.min, kcal: O.kcal, count: walks.length, gainM: walks.reduce((a, r) => a + (r.elev?.gainM ?? 0), 0) },
+    cardio: { km: Math.round(X.m / 100) / 10, minutes: X.min, kcal: X.kcal, count: other.length },
     walk,
-    activeMin: liftMin + R.min + O.min,
-    kcal: liftKcal + R.kcal + O.kcal + (walk?.kcal ?? 0),
+    activeMin: liftMin + R.min + O.min + X.min,
+    kcal: liftKcal + R.kcal + O.kcal + X.kcal + (walk?.kcal ?? 0),
   };
 }
 
@@ -82,5 +87,6 @@ export function activityLine(a: DayActivity): string {
     a.lift.minutes ? `웨이트 ${a.lift.minutes}분` : null,
     a.run.count ? `러닝 ${a.run.km.toFixed(1)}km` : null,
     a.outdoor.count ? `걷기·등산 ${a.outdoor.km.toFixed(1)}km` : null,
+    a.cardio.count ? `유산소 ${a.cardio.minutes}분` : null,
   ].filter(Boolean).join(' · ');
 }

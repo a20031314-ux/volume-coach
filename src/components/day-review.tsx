@@ -93,6 +93,12 @@ export function DayReview({ date }: { date: string }) {
             <T>{`${a.outdoor.km.toFixed(1)}km · ${a.outdoor.minutes}분${a.outdoor.gainM ? ` · ↑${a.outdoor.gainM}m` : ''}`}</T>
           </Row>
         ) : null}
+        {a.cardio.count ? (
+          <Row style={{ justifyContent: 'space-between' }}>
+            <T v="muted">자전거·유산소</T>
+            <T>{`${a.cardio.minutes}분${a.cardio.km ? ` · ${a.cardio.km.toFixed(1)}km` : ''} · ${a.cardio.kcal}kcal`}</T>
+          </Row>
+        ) : null}
         <Row style={{ justifyContent: 'space-between' }}>
           <T v="muted">걸음</T>
           <T>{a.walk?.steps != null ? `${n(a.walk.steps)}보 · ${a.walk.km.toFixed(1)}km` : a.walk ? `${a.walk.km.toFixed(1)}km` : '연결 안 됨'}</T>

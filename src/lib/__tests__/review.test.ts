@@ -6,7 +6,7 @@ import type { Session, WorkoutLog } from '../types';
 
 const act = (over: Partial<DayActivity> = {}): DayActivity => ({
   lift: { sets: 20, minutes: 60, kcal: 430 }, run: { km: 0, minutes: 0, kcal: 0, count: 0 },
-  outdoor: { km: 0, minutes: 0, kcal: 0, count: 0, gainM: 0 }, walk: null, activeMin: 60, kcal: 430, ...over,
+  outdoor: { km: 0, minutes: 0, kcal: 0, count: 0, gainM: 0 }, cardio: { km: 0, minutes: 0, kcal: 0, count: 0 }, walk: null, activeMin: 60, kcal: 430, ...over,
 });
 
 describe('review', () => {

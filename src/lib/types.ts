@@ -71,8 +71,16 @@ export interface Run extends SyncMeta {
   paceSecPerKm: number | null;
   kcal: number;
   splits: { km: number; seconds: number }[];
-  /** run (default), walk or hike */
+  /** run (default), walk, hike, ride (GPS) or other (time-based) */
   kind?: ActivityKind;
+  /** kind 'other': which activity (cardio.ts key) */
+  activity?: string;
+  /** kind 'other': 1 가볍게 / 2 보통 / 3 힘들게 */
+  intensity?: 1 | 2 | 3;
+  /** entered by hand rather than recorded */
+  manual?: boolean;
+  /** leg load in running-km for time-based cardio */
+  legKmEq?: number;
   /** simplified route as [lat, lng, segment, gps altitude?] */
   route: RoutePoint[];
   /** moving second at each route point (newer runs) */
@@ -129,6 +137,9 @@ export interface RunOptions {
   countdown?: number;
   /** what to record; interval mode applies to running only */
   kind?: ActivityKind;
+  /** kind 'other': last picked activity (cardio.ts key) and intensity */
+  cardio?: string;
+  cardioIntensity?: 1 | 2 | 3;
   /** last used interval plan */
   interval: IntervalPlanData;
 }

@@ -1,9 +1,14 @@
 /** Elevation and grade from a recorded track. Pure functions; the DEM lookup lives in src/run/elevation-fetch.ts. */
+import { rideKcal } from './cardio';
 import { haversine } from './run';
 
-export type ActivityKind = 'run' | 'walk' | 'hike';
+/** run/walk/hike/ride are GPS-tracked; other is time-based cardio (see cardio.ts) */
+export type ActivityKind = 'run' | 'walk' | 'hike' | 'ride' | 'other';
 
-export const KIND_NAME: Record<ActivityKind, string> = { run: '러닝', walk: '걷기', hike: '등산' };
+export const KIND_NAME: Record<ActivityKind, string> = { run: '러닝', walk: '걷기', hike: '등산', ride: '자전거', other: '유산소' };
+
+/** GPS-tracked kinds */
+export const GPS_KINDS = ['run', 'walk', 'hike', 'ride'] as const;
 
 export interface Climb { startM: number; lengthM: number; gainM: number; gradePct: number }
 
@@ -164,12 +169,20 @@ export function gradeAdjustedPace(movingS: number, e: Pick<Elevation, 'flatEqM'>
 }
 
 /** kcal per kg per flat-equivalent km by activity */
-const KCAL_PER_KG_KM: Record<ActivityKind, number> = { run: 1.0, walk: 0.5, hike: 0.6 };
+const KCAL_PER_KG_KM: Record<ActivityKind, number> = { run: 1.0, walk: 0.5, hike: 0.6, ride: 0.3, other: 0 };
 
-export function activityKcal(kind: ActivityKind, distanceM: number, weightKg: number, e?: Pick<Elevation, 'flatEqM'> | null): number {
+/**
+ * GPS activities. Rides are rated by average speed when moving time is known (cycling cost
+ * isn't proportional to distance); hills scale it like the others.
+ */
+export function activityKcal(kind: ActivityKind, distanceM: number, weightKg: number, e?: Pick<Elevation, 'flatEqM'> | null, movingS?: number): number {
+  if (kind === 'ride' && movingS) {
+    const hill = e && e.flatEqM > 0 && distanceM > 0 ? Math.min(1.5, e.flatEqM / distanceM) : 1;
+    return Math.round(rideKcal(distanceM, movingS, weightKg) * hill);
+  }
   const m = e && e.flatEqM > 0 ? e.flatEqM : distanceM;
   return Math.round((m / 1000) * weightKg * KCAL_PER_KG_KM[kind]);
 }
 
 /** How hard a km of this activity is on the legs compared to a running km. */
-export const LEG_LOAD: Record<ActivityKind, number> = { run: 1, walk: 0.2, hike: 0.5 };
+export const LEG_LOAD: Record<ActivityKind, number> = { run: 1, walk: 0.2, hike: 0.5, ride: 0.15, other: 0 };

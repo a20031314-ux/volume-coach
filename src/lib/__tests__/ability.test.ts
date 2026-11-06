@@ -92,3 +92,16 @@ describe('hints', () => {
     expect(h[0].key).toBe('pull:6+');
   });
 });
+
+describe('variations and functional exercises', () => {
+  it('has unique names', () => {
+    const names = LIBRARY.map((e) => e.n);
+    expect(new Set(names).size).toBe(names.length);
+  });
+  it('are pickable but only recommended once done or favourited', () => {
+    expect(pickable('ham', ctx()).map((e) => e.n)).toContain('스모 데드리프트');
+    expect(candidatesFor('ham', ctx()).map((e) => e.n)).not.toContain('스모 데드리프트');
+    expect(candidatesFor('ham', ctx({ known: new Set(['스모 데드리프트']) })).map((e) => e.n)).toContain('스모 데드리프트');
+    expect(candidatesFor('ham', ctx({ exercisePrefs: { '케틀벨 스윙': 'fav' } }))[0].n).toBe('케틀벨 스윙');
+  });
+});

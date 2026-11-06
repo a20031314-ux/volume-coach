@@ -11,13 +11,14 @@ import { useToast } from '@/components/toast';
 import { Button, Card, ConfirmButton, Pills, Row, Segmented, T } from '@/components/ui';
 import { usePalette } from '@/constants/theme';
 import { fmt } from '@/lib/dates';
-import { KIND_NAME, gradeAdjustedPace } from '@/lib/elevation';
+import { INTENSITY_NAME, cardioKcal, cardioType } from '@/lib/cardio';
+import { gradeAdjustedPace } from '@/lib/elevation';
 import { PHASE_NAME } from '@/lib/interval';
 import { RATE_NAME, fmtDuration, fmtKm, fmtRate, type RateUnit } from '@/lib/run';
 import { fmtSprint, kmh, splitSpeeds } from '@/lib/sprint';
 import { presetRanges, rangeStats, type Range } from '@/lib/range';
 import { momentAt, routeTimes } from '@/lib/scrub';
-import { clock } from '@/lib/timeline';
+import { clock, runTitle } from '@/lib/timeline';
 import { weatherFactor } from '@/lib/weather';
 import { enrichElevation } from '@/run/elevation-fetch';
 import type { Run } from '@/lib/types';
@@ -36,8 +37,10 @@ export default function RunDetail() {
   const moment = r && cursor != null && times.length ? momentAt(r, times, cursor) : null;
   const runOpts = useData((s) => s.settings.run);
   const update = useData((s) => s.updateSettings);
-  const unit: RateUnit = runOpts.unit ?? 'pace';
-  const setUnit = (u: RateUnit) => update({ run: { ...runOpts, unit: u } });
+  /** rides read in km/h unless switched here; the others follow the saved unit */
+  const [unitHere, setUnitHere] = useState<RateUnit | null>(null);
+  const unit: RateUnit = unitHere ?? (r?.kind === 'ride' ? 'speed' : runOpts.unit ?? 'pace');
+  const setUnit = (u: RateUnit) => { setUnitHere(u); if (r?.kind !== 'ride') update({ run: { ...runOpts, unit: u } }); };
   const rate = (sec: number | null) => fmtRate(sec, unit);
   /** how far off the target a work phase was: seconds per km, or km/h */
   const diff = (sec: number, tgt: number) => unit === 'speed'
@@ -45,12 +48,13 @@ export default function RunDetail() {
     : `${sec - tgt > 0 ? '+' : '−'}${Math.abs(Math.round(sec - tgt))}초`;
 
   useEffect(() => {
-    if (r && r.elev?.source !== 'dem') void enrichElevation(r);
+    if (r && r.route.length > 1 && r.elev?.source !== 'dem') void enrichElevation(r);
     // only on open; enrichElevation updates the run itself
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   if (!r || r.deleted) return <Page><T v="muted">기록을 찾을 수 없어요.</T></Page>;
+  if (r.kind === 'other') return <CardioDetail r={r} onDelete={() => { removeRun(r.id); toast('삭제됨'); router.back(); }} />;
   const presets = presetRanges(r);
   const sel = range && r.timeline ? rangeStats(r.timeline, range) : null;
   const kind = r.kind ?? 'run';
@@ -62,7 +66,7 @@ export default function RunDetail() {
     <Page>
       {r.sprint ? <SprintCard sprint={r.sprint} date={fmt(r.date)} /> : (
         <Card>
-          <T v="small">{fmt(r.date)} · {KIND_NAME[kind]}{r.intervalPlan ? ' · 인터벌' : ''}</T>
+          <T v="small">{fmt(r.date)} · {runTitle(r)}</T>
           <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
             <T v="big" style={{ fontSize: 34, lineHeight: 40 }}>{fmtKm(r.distanceM)}km</T>
             <View style={{ alignItems: 'flex-end' }}>
@@ -171,6 +175,41 @@ export default function RunDetail() {
       ) : null}
 
       <ConfirmButton label="이 기록 삭제" onConfirm={() => { removeRun(r.id); toast('삭제됨'); router.back(); }} />
+    </Page>
+  );
+}
+
+/** Time-based cardio: no route or pace, just when, how long, how hard and what it cost. */
+function CardioDetail({ r, onDelete }: { r: Run; onDelete: () => void }) {
+  const c = usePalette();
+  const weight = useData((s) => s.settings.profile.weight) ?? 70;
+  const type = cardioType(r.activity);
+  const min = Math.round(r.movingS / 60);
+  const estimated = r.intensity ? cardioKcal(type.key, r.intensity, r.movingS / 60, weight) : null;
+  const fromMachine = estimated != null && Math.abs(estimated - r.kcal) > 1;
+  return (
+    <Page>
+      <Card>
+        <T v="small">{fmt(r.date)} · {clock(r.startedAt)}–{clock(r.endedAt)}{r.manual ? ' · 직접 입력' : ''}</T>
+        <Row style={{ justifyContent: 'space-between', alignItems: 'flex-end' }}>
+          <T v="big" style={{ fontSize: 30, lineHeight: 36, flexShrink: 1 }}>{type.name}</T>
+          <View style={{ alignItems: 'flex-end' }}>
+            <T v="num" style={{ fontSize: 18 }}>{min}분{r.distanceM ? ` · ${fmtKm(r.distanceM)}km` : ''}</T>
+            <T v="small">{r.kcal}kcal{fromMachine ? ' · 기계 값' : ''}</T>
+          </View>
+        </Row>
+      </Card>
+      <Card style={{ gap: 6 }}>
+        <Row style={{ justifyContent: 'space-between' }}><T v="muted">강도</T><T>{r.intensity ? INTENSITY_NAME[r.intensity] : '–'}</T></Row>
+        {fromMachine && estimated != null ? (
+          <Row style={{ justifyContent: 'space-between' }}><T v="muted">시간·강도로 계산하면</T><T>{estimated}kcal</T></Row>
+        ) : null}
+        {r.legKmEq ? (
+          <Row style={{ justifyContent: 'space-between' }}><T v="muted">다리 부담</T><T>러닝 {r.legKmEq.toFixed(1)}km 정도</T></Row>
+        ) : null}
+        <T v="small" style={{ color: c.muted }}>칼로리는 운동 강도표(MET) × 체중 × 시간으로 계산해요. 실제와 ±20% 정도 차이가 날 수 있어요.</T>
+      </Card>
+      <ConfirmButton label="이 기록 삭제" onConfirm={onDelete} />
     </Page>
   );
 }

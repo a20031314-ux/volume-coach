@@ -67,7 +67,7 @@ function rank(e: Exercise, ctx: AbilityCtx): number {
 export function candidates(ctx: AbilityCtx, filter: (e: Exercise) => boolean = () => true): Exercise[] {
   const eq = ctx.profile.equipment ?? 'gym';
   const lib = library(ctx.customExercises).map((e, i) => ({ e, i }))
-    .filter(({ e }) => filter(e) && available(e, eq) && verdict(e, ctx).ok);
+    .filter(({ e }) => filter(e) && available(e, eq) && verdict(e, ctx).ok && (!e.extra || rank(e, ctx) < 2));
   return lib.sort((a, b) => rank(a.e, ctx) - rank(b.e, ctx) || a.i - b.i).map(({ e }) => e);
 }
 

@@ -95,6 +95,9 @@ export function ActivitySheet({ open, onClose }: { open: boolean; onClose: () =>
         {a.outdoor.count ? (
           <Line name="걷기·등산" main={`${a.outdoor.km.toFixed(1)}km`} sub={[`${a.outdoor.minutes}분`, a.outdoor.gainM ? `↑${a.outdoor.gainM}m` : null].filter(Boolean).join(' · ')} kcal={a.outdoor.kcal} />
         ) : null}
+        {a.cardio.count ? (
+          <Line name="자전거·유산소" main={`${a.cardio.minutes}분`} sub={a.cardio.km ? `${a.cardio.km.toFixed(1)}km` : `${a.cardio.count}회`} kcal={a.cardio.kcal} />
+        ) : null}
       </View>
       <Row style={{ justifyContent: 'space-between' }}>
         <T v="title" style={{ fontSize: 15 }}>합계</T>

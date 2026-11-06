@@ -40,14 +40,17 @@ export const MIN_STEP_M = 3;
  * Decide whether a new fix should be appended after `last`.
  * Returns the distance to add (0 when it starts a new segment), or null to drop the fix.
  */
-export function acceptPoint(last: GpsPoint | undefined, p: GpsPoint): number | null {
+/** fastest plausible speed between fixes, m/s: running/walking vs cycling */
+export const MAX_RIDE_SPEED_MS = 25;
+
+export function acceptPoint(last: GpsPoint | undefined, p: GpsPoint, maxSpeed = MAX_SPEED_MS): number | null {
   if (p.acc != null && p.acc > MAX_ACCURACY_M) return null;
   if (!last || last.seg !== p.seg) return 0;
   if (p.t <= last.t) return null;
   const d = haversine(last, p);
   const minStep = Math.max(MIN_STEP_M, ((last.acc ?? 0) + (p.acc ?? 0)) / 4);
   if (d < minStep) return null;
-  if (d / ((p.t - last.t) / 1000) > MAX_SPEED_MS) return null;
+  if (d / ((p.t - last.t) / 1000) > maxSpeed) return null;
   return d;
 }
 

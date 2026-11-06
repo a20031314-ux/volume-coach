@@ -1,10 +1,11 @@
 /** One day's activities in time order: the top of 기록 → each item opens its own timeline. */
+import { INTENSITY_NAME, cardioType } from './cardio';
 import { KIND_NAME } from './elevation';
 import type { MoveSegment } from './movement';
 import { setCount } from './session';
 import type { Run, Session, WorkoutLog } from './types';
 
-export type TimelineKind = 'lift' | 'run' | 'walk' | 'hike' | 'move';
+export type TimelineKind = 'lift' | 'run' | 'walk' | 'hike' | 'ride' | 'other' | 'move';
 
 export interface TimelineItem {
   key: string;
@@ -48,10 +49,13 @@ export function dayTimeline(
 
   for (const r of data.runs.filter((x) => x.date === date)) {
     const kind = r.kind ?? 'run';
+    const min = `${Math.round(r.movingS / 60)}분`;
     items.push({
       key: `r:${r.id}`, kind, startMs: r.startedAt, endMs: r.endedAt,
-      title: KIND_NAME[kind] + (r.intervalPlan ? ' · 인터벌' : ''),
-      sub: [`${(r.distanceM / 1000).toFixed(2)}km`, `${Math.round(r.movingS / 60)}분`, r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · '),
+      title: runTitle(r),
+      sub: kind === 'other'
+        ? [min, r.intensity ? INTENSITY_NAME[r.intensity] : null, r.distanceM ? `${(r.distanceM / 1000).toFixed(2)}km` : null, `${r.kcal}kcal`].filter(Boolean).join(' · ')
+        : [`${(r.distanceM / 1000).toFixed(2)}km`, min, r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · '),
       target: { type: 'run', id: r.id },
     });
   }
@@ -77,4 +81,11 @@ export function clock(ms: number): string {
 export function span(i: Pick<TimelineItem, 'startMs' | 'endMs'>): string {
   if (i.endMs == null) return `${clock(i.startMs)}–`;
   return clock(i.startMs) === clock(i.endMs) ? clock(i.startMs) : `${clock(i.startMs)}–${clock(i.endMs)}`;
+}
+
+/** "러닝 · 인터벌", "자전거", or the cardio activity's name */
+export function runTitle(r: Pick<Run, 'kind' | 'activity' | 'intervalPlan'>): string {
+  const kind = r.kind ?? 'run';
+  if (kind === 'other') return cardioType(r.activity).name;
+  return KIND_NAME[kind] + (r.intervalPlan ? ' · 인터벌' : '');
 }

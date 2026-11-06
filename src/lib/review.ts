@@ -24,7 +24,7 @@ export interface Burn {
 export function dayBurn(bmr: number, a: DayActivity, act: Profile['act'], dayFraction = 1): Burn {
   const perMin = bmr / 1440;
   const exMin = a.activeMin;
-  const exercise = Math.max(0, Math.round(a.lift.kcal + a.run.kcal + a.outdoor.kcal - perMin * exMin));
+  const exercise = Math.max(0, Math.round(a.lift.kcal + a.run.kcal + a.outdoor.kcal + (a.cardio?.kcal ?? 0) - perMin * exMin));
   const hasSteps = a.walk?.steps != null || (a.walk != null && a.walk.km > 0);
   const dailyRate = hasSteps ? 0.15 : ([0.25, 0.35, 0.45][Number(act ?? 1)] ?? 0.35);
   const b = Math.round(bmr * dayFraction);

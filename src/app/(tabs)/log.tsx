@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { useNow } from '@/hooks/use-now';
 import { Platform, View } from 'react-native';
 
+import { useCardioTimer } from '@/components/cardio-panel';
 import { useDayActivity } from '@/components/day-activity';
 import { DayReview } from '@/components/day-review';
 import { Sheet } from '@/components/layout';
@@ -17,6 +18,7 @@ import { Space, usePalette } from '@/constants/theme';
 import { useDayBuckets, useHealth } from '@/health/use-steps';
 import { knownExercises, pickable } from '@/lib/ability';
 import { activityLine } from '@/lib/activity';
+import { cardioType } from '@/lib/cardio';
 import { addDays, fmt, parse, today } from '@/lib/dates';
 import { KIND_NAME } from '@/lib/elevation';
 import { MUSCLES, MUSCLE_NAME, library } from '@/lib/exercises';
@@ -57,14 +59,18 @@ export default function Log() {
     logs: live(logsT), sessions: live(sessionsT), runs: live(runsT), walks: move.segments,
   }), [date, logsT, sessionsT, runsT, move.segments]);
 
-  const color: Record<TimelineKind, string> = { lift: c.accent, run: c.warn, walk: c.ok, hike: c.ok, move: c.ok };
+  const color: Record<TimelineKind, string> = { lift: c.accent, run: c.warn, ride: c.warn, other: c.warn, walk: c.ok, hike: c.ok, move: c.ok };
   const isToday = date === today();
   const liveRun = isToday && run.status !== 'idle' && run.startedAt;
+  const cardioStart = useCardioTimer((t) => t.startedAt);
+  const cardioName = cardioType(useData((s) => s.settings.run.cardio)).name;
+  const liveCardio = isToday && cardioStart != null;
   const dayStart = parse(date).getTime();
   const now = clockNow.getTime();
   const blocks = [
     ...items.map((i) => ({ startMs: i.startMs, endMs: i.endMs ?? now, color: color[i.kind] })),
     ...(liveRun ? [{ startMs: run.startedAt!, endMs: now, color: c.warn }] : []),
+    ...(liveCardio ? [{ startMs: cardioStart!, endMs: now, color: c.warn }] : []),
   ];
   const line = activityLine(activity);
 
@@ -105,10 +111,14 @@ export default function Log() {
             <TlNode time={span({ startMs: run.startedAt!, endMs: null })} title={`${KIND_NAME[run.kind ?? 'run']} 진행 중`}
               sub={`${(run.distanceM / 1000).toFixed(2)}km`} color={c.warn} onPress={() => router.push('/run')} last={!items.length} />
           ) : null}
+          {liveCardio ? (
+            <TlNode time={span({ startMs: cardioStart!, endMs: null })} title={`${cardioName} 진행 중`}
+              sub="타이머" color={c.warn} onPress={() => router.push('/run')} last={!items.length} />
+          ) : null}
           {items.map((i, n) => (
             <TlNode key={i.key} time={span(i)} title={i.title} sub={i.sub} color={color[i.kind]} onPress={() => open(i)} last={n === items.length - 1} />
           ))}
-          {!items.length && !liveRun ? <T v="muted" style={{ textAlign: 'center', paddingVertical: Space.lg }}>이 날은 기록이 없어요.</T> : null}
+          {!items.length && !liveRun && !liveCardio ? <T v="muted" style={{ textAlign: 'center', paddingVertical: Space.lg }}>이 날은 기록이 없어요.</T> : null}
         </View>
 
         <Button label="+ 웨이트 기록" onPress={() => setAdding('chest')} />

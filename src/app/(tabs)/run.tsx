@@ -5,13 +5,16 @@ import { Platform, View } from 'react-native';
 
 import { Disclosure, Sheet } from '@/components/layout';
 import { LiveSpeedChart } from '@/components/live-speed';
+import { CardioPanel } from '@/components/cardio-panel';
 import { RouteMap } from '@/components/route-map';
 import { TlNode } from '@/components/timeline';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, Chip, ConfirmButton, Meter, Pills, Row, Screen, Segmented, Stepper, T } from '@/components/ui';
 import { Radius, Space, usePalette } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
+import { INTENSITY_NAME } from '@/lib/cardio';
 import { fmt } from '@/lib/dates';
+import { runTitle } from '@/lib/timeline';
 import { PHASE_NAME, buildPhases, phaseAt, planTotalS, type PhaseKind } from '@/lib/interval';
 import { paceStatus, targetBand } from '@/lib/live';
 import { body } from '@/lib/profile';
@@ -25,6 +28,10 @@ import {
   prepareRun, resumeRun, targetNow, sayCount, startRun, tickCues, useRun, warmGps, type StartResult,
 } from '@/run/tracker';
 import { live, useData } from '@/store/store';
+
+const KINDS: { k: ActivityKind; n: string }[] = [
+  { k: 'run', n: '러닝' }, { k: 'walk', n: '걷기' }, { k: 'hike', n: '등산' }, { k: 'ride', n: '자전거' }, { k: 'other', n: '실내·기타 유산소' },
+];
 
 const PRESETS: { n: string; p: Partial<IntervalPlanData> }[] = [
   { n: '4분/3분 ×5', p: { workS: 240, restS: 180, repeats: 5 } },
@@ -76,7 +83,7 @@ export default function RunScreen() {
   const runs = useMemo(() => live(runsT).sort((a, b) => b.startedAt - a.startedAt), [runsT]);
   const weekKm = useMemo(() => {
     const since = today.getTime() - 7 * 864e5;
-    return runs.filter((r) => r.startedAt >= since).reduce((a, r) => a + r.distanceM, 0) / 1000;
+    return runs.filter((r) => r.startedAt >= since && ['run', 'walk', 'hike'].includes(r.kind ?? 'run')).reduce((a, r) => a + r.distanceM, 0) / 1000;
   }, [runs, today]);
   const weight = body(settings.profile, live(bodyT))?.weight ?? 70;
 
@@ -107,6 +114,9 @@ export default function RunScreen() {
   const interval = kind === 'run' && opts.mode === 'interval';
   const sprint = kind === 'run' && opts.mode === 'sprint';
   const sprintM = opts.sprintM ?? 100;
+  /** rides read in km/h; everything else follows the chosen unit */
+  const unit = (run.status !== 'idle' ? run.kind : kind) === 'ride' ? 'speed' as const : opts.unit ?? 'pace';
+  const runUnit = (k?: ActivityKind) => (k === 'ride' ? 'speed' as const : opts.unit ?? 'pace');
   const best = useMemo(() => {
     const out: Record<number, number> = {};
     for (const r of runs) if (r.sprint) out[r.sprint.targetM] = Math.min(out[r.sprint.targetM] ?? Infinity, r.sprint.timeS);
@@ -118,7 +128,7 @@ export default function RunScreen() {
     voice: opts.voice,
     kmAlert: interval || sprint ? false : opts.kmAlert,
     everyMin: interval || sprint ? 0 : opts.everyMin,
-    unit: opts.unit ?? 'pace',
+    unit: unit,
     targetPaceS: interval || sprint ? null : opts.targetPaceS ?? null,
     paceAlert: sprint ? false : opts.paceAlert ?? true,
     sprintM: sprint ? sprintM : null,
@@ -201,7 +211,8 @@ export default function RunScreen() {
 
       {run.status === 'idle' ? (
         <Card style={{ gap: Space.lg }}>
-          <Segmented options={[{ v: 'run', n: '러닝' }, { v: 'walk', n: '걷기' }, { v: 'hike', n: '등산' }]} value={kind} onChange={(v) => v && setOpts({ kind: v })} />
+          <Pills options={KINDS} value={kind} onToggle={(k) => setOpts({ kind: k })} />
+          {kind === 'other' ? <CardioPanel weightKg={weight} /> : (<>
           {kind === 'run' ? (
             <Segmented options={[{ v: 'free', n: '자유' }, { v: 'interval', n: '인터벌' }, { v: 'sprint', n: '스프린트' }]} value={opts.mode} onChange={(v) => v && setOpts({ mode: v })} />
           ) : null}
@@ -210,7 +221,7 @@ export default function RunScreen() {
               <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
                 <View style={{ flexShrink: 1 }}>
                   <T v="title">{fmtDuration(opts.interval.workS)} / {fmtDuration(opts.interval.restS)} × {opts.interval.repeats}</T>
-                  <T v="small">총 {fmtDuration(planTotalS(planPhases))}{opts.interval.targetPaceS ? ` · 목표 ${fmtRate(opts.interval.targetPaceS, opts.unit)}` : ''}</T>
+                  <T v="small">총 {fmtDuration(planTotalS(planPhases))}{opts.interval.targetPaceS ? ` · 목표 ${fmtRate(opts.interval.targetPaceS, unit)}` : ''}</T>
                 </View>
                 <Button label="편집" kind="ghost" onPress={() => setEditing(true)} />
               </Row>
@@ -260,6 +271,7 @@ export default function RunScreen() {
               {problem.openSettings ? <Button label="설정 열기" onPress={openSettings} style={{ alignSelf: 'flex-start' }} /> : null}
             </View>
           ) : null}
+          </>)}
         </Card>
       ) : null}
 
@@ -296,7 +308,7 @@ export default function RunScreen() {
         <Segmented options={[{ v: 'on', n: '기록 중 화면 켜두기' }, { v: 'off', n: '자동 꺼짐' }]} value={opts.keepAwake ?? true ? 'on' : 'off'}
           onChange={(v) => v && setOpts({ keepAwake: v === 'on' })} />
         <T v="muted">표시 단위</T>
-        <Segmented options={[{ v: 'pace', n: '페이스 (분/km)' }, { v: 'speed', n: '속도 (km/h)' }]} value={opts.unit ?? 'pace'}
+        <Segmented options={[{ v: 'pace', n: '페이스 (분/km)' }, { v: 'speed', n: '속도 (km/h)' }]} value={unit}
           onChange={(v) => v && setOpts({ unit: v })} />
         <T v="muted">카운트다운</T>
         <Segmented options={[{ v: '0', n: '없음' }, { v: '3', n: '3초' }, { v: '5', n: '5초' }, { v: '10', n: '10초' }]} value={String(countdown)}
@@ -318,7 +330,7 @@ export default function RunScreen() {
                 <T v="title" style={{ color: phaseColor(pos.phase.kind) }}>
                   {PHASE_NAME[pos.phase.kind]}{pos.phase.kind === 'work' ? ` ${pos.phase.rep}/${phases!.filter((p) => p.kind === 'work').length}` : ''}
                 </T>
-                {run.plan?.targetPaceS && pos.phase.kind === 'work' ? <Chip label={`목표 ${fmtRate(run.plan.targetPaceS, opts.unit)}`} /> : null}
+                {run.plan?.targetPaceS && pos.phase.kind === 'work' ? <Chip label={`목표 ${fmtRate(run.plan.targetPaceS, unit)}`} /> : null}
               </Row>
               <T v="big" style={{ fontSize: 56, lineHeight: 62, color: phaseColor(pos.phase.kind) }}>{fmtDuration(Math.ceil(pos.remainingS))}</T>
               <Meter pct={(pos.elapsedS / (pos.phase.endS - pos.phase.startS)) * 100} color={phaseColor(pos.phase.kind)} height={6} />
@@ -350,14 +362,14 @@ export default function RunScreen() {
         <Card style={{ gap: Space.sm }}>
           <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
             <View>
-              <T v="num" style={{ fontSize: 40, lineHeight: 46, color: liveColor }}>{fmtRate(curPace, opts.unit)}</T>
-              <T v="small">{liveStatus === 'slow' ? '목표보다 느려요' : liveStatus === 'fast' ? '목표보다 빨라요' : liveStatus === 'ok' ? '목표 페이스' : `현재 ${RATE_NAME[opts.unit ?? 'pace']}`}
-                {liveTarget ? ` · 목표 ${fmtRate(liveTarget, opts.unit)}` : ''}</T>
+              <T v="num" style={{ fontSize: 40, lineHeight: 46, color: liveColor }}>{fmtRate(curPace, unit)}</T>
+              <T v="small">{liveStatus === 'slow' ? '목표보다 느려요' : liveStatus === 'fast' ? '목표보다 빨라요' : liveStatus === 'ok' ? '목표 페이스' : `현재 ${RATE_NAME[unit]}`}
+                {liveTarget ? ` · 목표 ${fmtRate(liveTarget, unit)}` : ''}</T>
             </View>
             <Segmented options={[{ v: '60', n: '1분' }, { v: '180', n: '3분' }, { v: '300', n: '5분' }]} value={String(liveWindow)}
               onChange={(v) => v && setOpts({ liveWindowS: Number(v) })} />
           </Row>
-          <LiveSpeedChart samples={run.speeds} nowS={secs} windowS={liveWindow} targetPaceS={liveTarget} unit={opts.unit ?? 'pace'} />
+          <LiveSpeedChart samples={run.speeds} nowS={secs} windowS={liveWindow} targetPaceS={liveTarget} unit={unit} />
         </Card>
       ) : null}
 
@@ -369,9 +381,9 @@ export default function RunScreen() {
         </View>
         <Row style={{ justifyContent: 'space-around' }}>
           <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtDuration(secs)}</T><T v="small">시간</T></View>
-          <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtRate(avg, opts.unit)}</T><T v="small">평균 {RATE_NAME[opts.unit ?? 'pace']}</T></View>
-          {run.status !== 'running' ? <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtRate(curPace, opts.unit)}</T><T v="small">현재 {RATE_NAME[opts.unit ?? 'pace']}</T></View> : null}
-          <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{activityKcal(run.kind ?? 'run', run.distanceM, weight)}</T><T v="small">kcal</T></View>
+          <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtRate(avg, unit)}</T><T v="small">평균 {RATE_NAME[unit]}</T></View>
+          {run.status !== 'running' ? <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{fmtRate(curPace, unit)}</T><T v="small">현재 {RATE_NAME[unit]}</T></View> : null}
+          <View style={{ alignItems: 'center' }}><T v="num" style={{ fontSize: 24 }}>{activityKcal(run.kind ?? 'run', run.distanceM, weight, null, secs)}</T><T v="small">kcal</T></View>
         </Row>
         {run.status === 'paused' ? <T v="muted" style={{ textAlign: 'center' }}>일시정지 중 · 이 동안의 거리와 시간은 빼고 계산해요</T> : null}
         {gpsWeak ? <T v="small" style={{ textAlign: 'center', color: c.warn }}>GPS 신호를 찾는 중이에요. 하늘이 트인 곳에서 더 정확해요.</T> : null}
@@ -407,10 +419,11 @@ export default function RunScreen() {
       {runs.length ? (
         <View>
           {runs.slice(0, 10).map((r, i, arr) => (
-            <TlNode key={r.id} time={fmt(r.date).replace(/\s*\(.*\)/, '')} color={(r.kind ?? 'run') === 'run' ? c.warn : c.ok}
-              title={r.sprint ? `스프린트 ${r.sprint.targetM}m · ${fmtSprint(r.sprint.timeS)}` : `${KIND_NAME[r.kind ?? 'run']}${r.intervalPlan ? ' · 인터벌' : ''} · ${fmtKm(r.distanceM)}km`}
+            <TlNode key={r.id} time={fmt(r.date).replace(/\s*\(.*\)/, '')} color={['run', 'ride', 'other'].includes(r.kind ?? 'run') ? c.warn : c.ok}
+              title={r.sprint ? `스프린트 ${r.sprint.targetM}m · ${fmtSprint(r.sprint.timeS)}` : r.kind === 'other' ? `${runTitle(r)} · ${Math.round(r.movingS / 60)}분` : `${runTitle(r)} · ${fmtKm(r.distanceM)}km`}
               sub={r.sprint ? `최고 ${kmh(r.sprint.topV)}${best[r.sprint.targetM] === r.sprint.timeS ? ' · 최고 기록' : ''}`
-                : [fmtDuration(r.movingS), fmtRate(r.paceSecPerKm, opts.unit), r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · ')}
+                : r.kind === 'other' ? [r.intensity ? INTENSITY_NAME[r.intensity] : null, `${r.kcal}kcal`, r.manual ? '직접 입력' : null].filter(Boolean).join(' · ')
+                : [fmtDuration(r.movingS), fmtRate(r.paceSecPerKm, runUnit(r.kind)), r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · ')}
               onPress={() => router.push({ pathname: '/activity/run', params: { id: r.id } })} last={i === arr.length - 1} />
           ))}
         </View>

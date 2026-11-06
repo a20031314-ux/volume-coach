@@ -22,7 +22,7 @@ import {
 } from '@/lib/interval';
 import { body } from '@/lib/profile';
 import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/lib/elevation';
-import { acceptPoint, currentPace, haversine, simplify, summarize, type GpsPoint } from '@/lib/run';
+import { MAX_RIDE_SPEED_MS, acceptPoint, currentPace, haversine, simplify, summarize, type GpsPoint } from '@/lib/run';
 import { spokenSprint, sprintProgress } from '@/lib/sprint';
 import { enrichElevation, gpsElevation } from '@/run/elevation-fetch';
 import { enrichWeather } from '@/run/weather-fetch';
@@ -144,7 +144,7 @@ export function appendLocations(locs: Location.LocationObject[]) {
       const ms = movingAt(s, l.timestamp);
       const p: GpsPoint = { lat: l.coords.latitude, lng: l.coords.longitude, t: l.timestamp, acc: l.coords.accuracy, seg: s.seg, ms, alt: l.coords.altitude };
       const prev = points[points.length - 1];
-      const d = acceptPoint(prev, p);
+      const d = acceptPoint(prev, p, s.kind === 'ride' ? MAX_RIDE_SPEED_MS : undefined);
       let v = dopplerSpeed(l.coords.speed, (l.coords as { speedAccuracy?: number | null }).speedAccuracy);
       if (v == null && d != null && prev && prev.seg === p.seg) v = d / Math.max(0.5, (p.t - prev.t) / 1000);
       if (v == null && prev && prev.seg === p.seg && d == null && (l.coords.accuracy ?? 99) <= 35) {
@@ -360,7 +360,7 @@ export async function startRun(setup: RunSetup): Promise<StartResult> {
     useRun.setState({ ...idle });
     return { ok: false, message: `위치 기록을 시작하지 못했어요: ${(e as Error).message}` };
   }
-  if (setup.voice && !setup.sprintM) speak([setup.plan ? '인터벌 러닝을 시작합니다' : { run: '러닝을', walk: '걷기를', hike: '등산을' }[setup.kind] + ' 시작합니다']);
+  if (setup.voice && !setup.sprintM) speak([setup.plan ? '인터벌 러닝을 시작합니다' : { run: '러닝을', walk: '걷기를', hike: '등산을', ride: '자전거 기록을', other: '운동을' }[setup.kind] + ' 시작합니다']);
   tickCues();
   void schedulePhaseNotifications();
   return { ok: true };
@@ -430,7 +430,7 @@ export async function finishRun(): Promise<number | null> {
     distanceM: Math.round(sum.distanceM),
     movingS,
     paceSecPerKm: pace,
-    kcal: activityKcal(kind, sum.distanceM, b?.weight ?? 70, elev),
+    kcal: activityKcal(kind, sum.distanceM, b?.weight ?? 70, elev, movingS),
     splits: sum.splits,
     route,
     routeT,

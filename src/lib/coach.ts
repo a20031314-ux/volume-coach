@@ -19,7 +19,7 @@ export const RUN_FATIGUE_PER_KM: Partial<Record<MuscleKey, number>> = { quad: 0.
 export const RUN_SYSTEMIC_PER_KM = 1;
 
 /** Running-km equivalent: hills count extra, walking much less than running. */
-const legKm = (r: Run) => ((r.elev?.flatEqM || r.distanceM) / 1000) * LEG_LOAD[r.kind ?? 'run'];
+const legKm = (r: Run) => r.legKmEq ?? ((r.elev?.flatEqM || r.distanceM) / 1000) * LEG_LOAD[r.kind ?? 'run'];
 
 export type Mode = 'go' | 'light' | 'rest';
 export type StatusTone = 'ok' | 'warn' | 'bad' | 'rest' | 'accent';

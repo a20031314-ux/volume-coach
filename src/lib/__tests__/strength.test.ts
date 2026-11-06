@@ -70,3 +70,13 @@ describe('progression', () => {
     expect(nextPrescription(p, missed)!.kg).toBeLessThan(buildProgram(p)[2].expected1rm * buildProgram(p)[2].pct);
   });
 });
+
+describe('variation ratios', () => {
+  it('derives a sumo/trap-bar/rack-pull start from the deadlift', async () => {
+    const { estimateFor } = await import('../strength');
+    const t = new Map([['컨벤셔널 데드리프트', { e1rm: 200, date: '2026-11-01', kg: 180, reps: 3 }]]);
+    expect(estimateFor('트랩바 데드리프트', t)?.e1rm).toBeCloseTo(210);
+    expect(estimateFor('랙풀', t)?.e1rm).toBeCloseTo(230);
+    expect(estimateFor('펜들레이 로우', t)?.e1rm).toBeCloseTo(100);
+  });
+});
