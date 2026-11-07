@@ -13,7 +13,6 @@ import { StepsChart } from '@/components/steps-chart';
 import { DayStrip, TlNode } from '@/components/timeline';
 import { useToast } from '@/components/toast';
 import { Button, Card, DayNav, Field, NumField, Pills, Row, Screen, Stepper, T } from '@/components/ui';
-import { WeekView } from '@/components/week-view';
 import { Space, usePalette } from '@/constants/theme';
 import { useDayBuckets, useHealth } from '@/health/use-steps';
 import { knownExercises, pickable } from '@/lib/ability';
@@ -31,12 +30,12 @@ import { live, useData } from '@/store/store';
 
 /**
  * 기록: one day. On top the day in one line (burn vs intake → full review), then activity, then the
- * timeline; each item opens its own (workout → sets, run → pace). Weekly volume opens from the header.
+ * timeline; each item opens its own (workout → sets, run → pace). Weekly volume lives in MY.
  */
 export default function Log() {
   const c = usePalette();
   const params = useLocalSearchParams<{ muscle?: string }>();
-  const [sheet, setSheet] = useState<'review' | 'week' | null>(null);
+  const [sheet, setSheet] = useState<'review' | null>(null);
   const [date, setDate] = useState(today());
   const [adding, setAdding] = useState<MuscleKey | null>(null);
 
@@ -86,7 +85,7 @@ export default function Log() {
   };
 
   return (
-    <Screen title="기록" right={<Button label="주간 볼륨" kind="ghost" onPress={() => setSheet('week')} />}>
+    <Screen title="기록">
         <DayNav date={date} label={isToday ? `오늘 · ${fmt(date)}` : fmt(date)}
           onPrev={() => setDate(addDays(date, -1))} onNext={() => { if (!isToday) setDate(addDays(date, 1)); }} />
 
@@ -130,9 +129,6 @@ export default function Log() {
 
       <Sheet open={sheet === 'review'} title={`하루 회고 · ${fmt(date)}`} onClose={() => setSheet(null)}>
         <DayReview date={date} />
-      </Sheet>
-      <Sheet open={sheet === 'week'} title="주간 볼륨" onClose={() => setSheet(null)}>
-        <WeekView />
       </Sheet>
 
       <AddLift open={adding != null} initialMuscle={adding ?? 'chest'} date={date} onClose={() => setAdding(null)} />

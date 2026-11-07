@@ -72,6 +72,7 @@ export default function RootLayout() {
               <Stack.Screen name="prefs/cheat" options={{ headerShown: true, title: '치팅데이' }} />
               <Stack.Screen name="prefs/meal-plan" options={{ headerShown: true, title: '식단 추천' }} />
               <Stack.Screen name="diet-report" options={{ headerShown: true, title: '내 식습관' }} />
+              <Stack.Screen name="guide" options={{ headerShown: true, title: '기능 설명' }} />
               <Stack.Screen name="run-map" options={{ headerShown: true, title: '경로' }} />
               <Stack.Screen name="prefs/health" options={{ headerShown: true, title: '걸음 수' }} />
               <Stack.Screen name="prefs/privacy" options={{ headerShown: true, title: '개인정보처리방침' }} />

@@ -27,7 +27,7 @@ export default function TabLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: 'fork.knife', selected: 'fork.knife' }} md="restaurant" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="settings">
-        <NativeTabs.Trigger.Label>설정</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>MY</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: 'person.crop.circle', selected: 'person.crop.circle.fill' }} md="person" />
       </NativeTabs.Trigger>
     </NativeTabs>
