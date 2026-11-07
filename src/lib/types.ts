@@ -45,6 +45,8 @@ export interface Meal extends SyncMeta {
   c: number;
   f: number;
   at: number;
+  /** logged from 고정식단 item with this id */
+  fixed?: string;
 }
 
 /** InBody-style body composition measurement. */
@@ -302,6 +304,8 @@ export interface Settings {
   courses?: SavedCourse[];
   /** 치팅데이 저금통 + 상쇄 */
   cheat?: CheatSettings;
+  /** 고정식단: foods / supplements eaten on a schedule */
+  fixed?: FixedSettings;
   updatedAt: number;
 }
 
@@ -329,6 +333,22 @@ export interface CheatSettings {
   offsets: Offset[];
   /** overeating days the user chose not to offset */
   dismissed: string[];
+}
+
+export interface FixedItem {
+  id: string;
+  /** built-in food name */
+  n: string;
+  amt: number;
+  /** minutes after midnight */
+  time: number;
+  /** 0 = Sunday … 6 = Saturday; empty = every day */
+  dows: number[];
+}
+export interface FixedSettings {
+  items: FixedItem[];
+  /** check: tap to log · auto: logged by itself once its time has passed */
+  mode: 'check' | 'auto';
 }
 
 export interface CourseItem {

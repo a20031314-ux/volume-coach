@@ -145,7 +145,7 @@ export function dietReport(meals: Meal[], opts: { to: string; days: number; targ
 
     prot.set(src, (prot.get(src) ?? 0) + m.p);
     // vegetables, fats and drinks aren't staples; meals count by their main starch
-    if (!def || !['veg', 'fat', 'snack', 'drink', 'side', 'protein', 'dairy'].includes(def.g)) carb.set(cs, (carb.get(cs) ?? 0) + m.c);
+    if (!def || !['veg', 'fat', 'snack', 'drink', 'side', 'protein', 'dairy', 'supp'].includes(def.g)) carb.set(cs, (carb.get(cs) ?? 0) + m.c);
     slotP.set(slot, (slotP.get(slot) ?? 0) + m.p);
     slotK.set(slot, (slotK.get(slot) ?? 0) + m.kcal);
   }

@@ -11,6 +11,7 @@ import type { Macros } from '@/lib/foods';
 import { slotOf, type Slot } from '@/lib/diet-report';
 import { mealName, mealTarget, nextMeal, recommendMeal, type MealRec } from '@/lib/meal-plan';
 import { dayTarget } from '@/lib/day-target';
+import { fixedOf, fixedRows, plannedLeft } from '@/lib/fixed';
 import type { BodyComp, Meal, Settings, WorkoutLog } from '@/lib/types';
 import { live, useData } from '@/store/store';
 
@@ -50,9 +51,12 @@ export function planMeals(input: { settings: Settings; meals: Meal[]; logs: Work
     const date = addDays(d0, i);
     const t = dayTarget({ settings, comps: input.comps, logs: input.logs, meals: input.meals }, date, d0);
     const day = t ? { kcal: t.kcal, p: t.p, c: t.c, f: t.f } : FALLBACK;
-    const eaten = i === 0
+    const logged = i === 0
       ? input.meals.filter((m) => m.date === date).reduce((a, m) => ({ k: a.k + m.kcal, p: a.p + m.p, c: a.c + m.c, f: a.f + m.f }), { k: 0, p: 0, c: 0, f: 0 })
       : { k: 0, p: 0, c: 0, f: 0 };
+    // 고정식단 not logged yet will be eaten anyway: size the recommendation around them
+    const fixed = plannedLeft(fixedRows(fixedOf(settings.fixed), date, i === 0 ? input.meals : []));
+    const eaten = { k: logged.k + fixed.k, p: logged.p + fixed.p, c: logged.c + fixed.c, f: logged.f + fixed.f };
     const start = i === 0 ? (input.grace ? nextMeal(times, nowMin) : times.findIndex((m) => m > nowMin)) : 0;
     if (start == null || start < 0) continue;
     let first: number = start;

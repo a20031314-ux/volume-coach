@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { CheatCard } from '@/components/cheat-card';
+import { FixedCard } from '@/components/fixed-card';
 import { CourseSheet } from '@/components/course-sheet';
 import { Disclosure } from '@/components/layout';
 import { MealRecCard } from '@/components/meal-rec';
@@ -200,6 +201,7 @@ export default function FoodScreen() {
           <T v="small">지금 먹은 양: {Math.round(sum.k)}kcal · 단백질 {Math.round(sum.p)}g · 탄수화물 {Math.round(sum.c)}g · 지방 {Math.round(sum.f)}g</T>
         </Card>
       )}
+      <FixedCard date={date} />
       {date === today() ? <CheatCard t={t} /> : null}
       {next && date === today() ? (
         <MealRecCard meal={next} onEat={(parts) => { addParts(parts, nowMs()); toast('추가됨'); }} />

@@ -6,16 +6,16 @@
 import { BRAND_FOODS } from './brands';
 import type { Food } from './types';
 
-export type FoodGroup = 'protein' | 'dairy' | 'carb' | 'fruit' | 'veg' | 'fat' | 'side' | 'meal' | 'snack' | 'drink' | 'brand';
+export type FoodGroup = 'protein' | 'dairy' | 'carb' | 'fruit' | 'veg' | 'fat' | 'side' | 'meal' | 'snack' | 'drink' | 'supp' | 'brand';
 
 export const GROUP_NAME: Record<FoodGroup, string> = {
-  protein: '단백질', carb: '탄수화물', fruit: '과일', veg: '채소', fat: '지방·견과', dairy: '유제품', side: '반찬·국', meal: '한식·외식', snack: '빵·간식', drink: '음료·술', brand: '프랜차이즈',
+  protein: '단백질', carb: '탄수화물', fruit: '과일', veg: '채소', fat: '지방·견과', dairy: '유제품', side: '반찬·국', meal: '한식·외식', snack: '빵·간식', drink: '음료·술', supp: '영양제', brand: '프랜차이즈',
 };
 
 export interface FoodDef {
   n: string;
   /** what the amount is counted in */
-  unit: 'g' | 'ml' | '개' | '공기' | '장' | '큰술' | '스쿱' | '인분' | '그릇' | '줄' | '봉' | '팩' | '조각' | '캔' | '병' | '잔';
+  unit: 'g' | 'ml' | '개' | '공기' | '장' | '큰술' | '스쿱' | '인분' | '그릇' | '줄' | '봉' | '팩' | '조각' | '캔' | '병' | '잔' | '정' | '캡슐' | '포';
   /** the k/p/c/f below are for this amount */
   base: number;
   /** amounts round to this */
@@ -426,6 +426,19 @@ const ROWS: Row[] = [
   ['꿔바로우', '인분', 1, 0.5, 600, 18, 70, 27, 'meal', { gPer: 200 }],
   ['샤브샤브용 소고기', 'g', 100, 10, 200, 20, 0, 13, 'protein'],
   ['쌈채소', '인분', 1, 1, 20, 2, 4, 0.3, 'veg', { gPer: 100 }],
+  // 영양제 (복용 체크용, 열량은 표시값 수준)
+  ['종합비타민', '정', 1, 1, 0, 0, 0, 0, 'supp'],
+  ['오메가3', '캡슐', 1, 1, 10, 0, 0, 1, 'supp', { o3: true }],
+  ['비타민D', '정', 1, 1, 0, 0, 0, 0, 'supp'],
+  ['비타민C', '정', 1, 1, 0, 0, 0, 0, 'supp'],
+  ['마그네슘', '정', 1, 1, 0, 0, 0, 0, 'supp'],
+  ['아연', '정', 1, 1, 0, 0, 0, 0, 'supp'],
+  ['철분', '정', 1, 1, 0, 0, 0, 0, 'supp'],
+  ['유산균', '포', 1, 1, 5, 0, 1, 0, 'supp'],
+  ['크레아틴', 'g', 5, 1, 0, 0, 0, 0, 'supp'],
+  ['콜라겐', '포', 1, 1, 18, 4.5, 0, 0, 'supp'],
+  ['BCAA', '스쿱', 1, 0.5, 20, 5, 0, 0, 'supp'],
+  ['전해질 파우더', '포', 1, 1, 15, 0, 4, 0, 'supp'],
 ];
 
 export const FOOD_DB: FoodDef[] = [

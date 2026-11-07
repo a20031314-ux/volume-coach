@@ -14,12 +14,18 @@ import { ToastProvider } from '@/components/toast';
 import { Palettes } from '@/constants/theme';
 import { AuthProvider } from '@/store/auth';
 import { useMealReminders } from '@/store/meal-reminders';
+import { useFixedAuto } from '@/hooks/use-fixed';
 import { useData } from '@/store/store';
 
 SplashScreen.preventAutoHideAsync();
 
 function MealReminders() {
   useMealReminders();
+  return null;
+}
+
+function FixedAuto() {
+  useFixedAuto();
   return null;
 }
 
@@ -44,6 +50,7 @@ export default function RootLayout() {
             <ExerciseMenuProvider>
             <StatusBar style="auto" />
             {Platform.OS !== 'web' ? <MealReminders /> : null}
+            <FixedAuto />
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="setup" options={{ gestureEnabled: false }} />
@@ -61,6 +68,7 @@ export default function RootLayout() {
               <Stack.Screen name="activity/run" options={{ headerShown: true, title: '유산소' }} />
               <Stack.Screen name="activity/lifts" options={{ headerShown: true, title: '웨이트 기록' }} />
               <Stack.Screen name="activity/move" options={{ headerShown: true, title: '걷기' }} />
+              <Stack.Screen name="prefs/fixed" options={{ headerShown: true, title: '고정식단' }} />
               <Stack.Screen name="prefs/cheat" options={{ headerShown: true, title: '치팅데이' }} />
               <Stack.Screen name="prefs/meal-plan" options={{ headerShown: true, title: '식단 추천' }} />
               <Stack.Screen name="diet-report" options={{ headerShown: true, title: '내 식습관' }} />

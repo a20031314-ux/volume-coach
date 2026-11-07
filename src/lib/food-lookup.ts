@@ -20,7 +20,7 @@ export const SOURCE_NAME: Record<CacheRow['source_kind'], string> = {
   official: '업체 공개값', public: '공공 자료', other: '웹 자료(검증 전)', estimate: 'AI 추정',
 };
 
-const UNITS: FoodDef['unit'][] = ['g', 'ml', '개', '공기', '장', '큰술', '스쿱', '인분', '그릇', '줄', '봉', '팩', '조각', '캔', '병', '잔'];
+const UNITS: FoodDef['unit'][] = ['g', 'ml', '개', '공기', '장', '큰술', '스쿱', '인분', '그릇', '줄', '봉', '팩', '조각', '캔', '병', '잔', '정', '캡슐', '포'];
 
 export function toFoodDef(r: CacheRow): FoodDef {
   const unit = (UNITS as string[]).includes(r.unit) ? (r.unit as FoodDef['unit']) : '인분';
