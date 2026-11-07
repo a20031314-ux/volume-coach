@@ -344,6 +344,8 @@ export interface FixedItem {
   time: number;
   /** 0 = Sunday … 6 = Saturday; empty = every day */
   dows: number[];
+  /** time set by hand (kept when suggestions are re-applied on check/uncheck) */
+  custom?: boolean;
 }
 export interface FixedSettings {
   items: FixedItem[];
