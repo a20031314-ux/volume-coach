@@ -23,10 +23,14 @@ export interface GuideSettings {
   only: string[];
   /** per-exercise tempo */
   tempoBy: Record<string, string>;
+  /** seconds to walk to the next exercise */
+  move?: number;
+  /** 자세 잡는 시간 (s) after "준비"; null = by exercise (바벨 길게, 머신 짧게) */
+  setup?: number | null;
 }
 
 export const DEFAULT_GUIDE: GuideSettings = {
-  on: false, voice: true, haptic: true, tempo: null, countdown: true, reps: true, rest: true, only: [], tempoBy: {},
+  on: false, voice: true, haptic: true, tempo: null, countdown: true, reps: true, rest: true, only: [], tempoBy: {}, move: 60, setup: null,
 };
 
 export const GOAL_TEMPO: Record<Goal | '', string> = { hyp: '3-0-1-0', str: '2-0-X-0', cut: '2-0-2-0', fit: '2-0-2-0', '': '2-0-2-0' };
@@ -84,21 +88,63 @@ export interface Cue {
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
 
-/** Countdown + reps of one set. `t` = 0 is when the countdown starts. */
+/** Rough time to say a line (rate 1.1) — the countdown waits for it. */
+export const speakTime = (text: string) => Math.max(1.2, text.replace(/[\s,.]/g, '').length * 0.17 + 0.4);
+
+/**
+ * 자세 잡는 시간: after "준비" before 3·2·1. Barbell lifts need to unrack / set the grip and brace.
+ */
+export function setupFor(e: Pick<Exercise, 'n'>): number {
+  const n = e.n;
+  if (/스쿼트/.test(n) && !/고블릿|스플릿|덤벨|맨몸|점프|피스톨|핵|머신/.test(n)) return 12;
+  if (/데드리프트|랙풀|굿모닝|힙 쓰러스트|클린|스내치/.test(n) && !/덤벨|싱글/.test(n)) return 10;
+  if (/바벨|벤치프레스|오버헤드프레스|밀리터리|Z프레스|푸시 프레스|SSB/.test(n) && !/덤벨|머신|스미스/.test(n)) return 10;
+  if (/덤벨|케틀벨|스미스/.test(n)) return 6;
+  return 4;
+}
+
+/** seconds from the "준비" line to 시작 */
+export const leadTime = (o: { countdown: boolean; setup: number; intro: string }) =>
+  (o.countdown ? Math.max(speakTime(o.intro), o.setup) + 3 : Math.max(o.setup, o.setup ? speakTime(o.intro) : 0));
+
+/** Countdown + reps of one set. `t` = 0 is when the "준비" line starts. */
 export function setCues(o: {
   setNo: number; reps: number; tempo: string; ex: Pick<Exercise, 'n' | 'p'>; countdown: boolean; rhythm: boolean;
+  /** 자세 잡는 시간 (s) */
+  setup?: number;
+  intro?: string;
+  /** seconds to hold (플랭크·캐리) */
+  hold?: number;
 }): { cues: Cue[]; length: number } {
   const cues: Cue[] = [];
+  const setup = o.setup ?? 0;
+  const intro = o.intro ?? `${o.setNo}세트 준비`;
   let t = 0;
   if (o.countdown) {
-    cues.push({ t: 0, say: `${o.setNo}세트 준비`, phase: '준비' });
-    cues.push({ t: 1.6, say: '3' }, { t: 2.6, say: '2' }, { t: 3.6, say: '1' });
-    t = 4.6;
+    const w = Math.max(1.6, speakTime(intro), setup);
+    cues.push({ t: 0, say: intro, phase: setup >= 4 ? '자세 잡기' : '준비' });
+    cues.push({ t: w, say: '3', phase: '준비' }, { t: w + 1, say: '2' }, { t: w + 2, say: '1' });
+    t = w + 3;
+  } else if (setup) {
+    cues.push({ t: 0, say: intro, phase: '자세 잡기' });
+    t = Math.max(setup, speakTime(intro));
   }
   cues.push({ t, say: '시작', buzz: true, phase: '시작', rep: 0 });
   const kind = rhythmKind(o.ex);
-  if (!o.rhythm || kind === 'hold') return { cues, length: t };
   const x = parseTempo(o.tempo);
+  if (kind === 'hold') {
+    if (!o.hold) return { cues, length: t };
+    if (o.hold > 15) cues.push({ t: t + o.hold - 10, say: '10초' });
+    t += o.hold;
+    cues.push({ t, say: `${o.setNo}세트 끝`, buzz: true, end: true, phase: '끝' });
+    return { cues, length: t };
+  }
+  if (!o.rhythm) {
+    // no rhythm: the set ends after about as long as the reps take
+    t = r1(t + 0.8 + o.reps * (kind === 'explosive' ? 3 : x.down + x.bottom + x.up + x.top + 0.3));
+    cues.push({ t, say: `${o.setNo}세트 끝`, buzz: true, end: true, phase: '끝' });
+    return { cues, length: t };
+  }
   t += 0.8;
   const pullFirst = PULL.has(o.ex.p);
   const upWord = o.ex.p === 'hpull' || o.ex.p === 'vpull' ? '당겨' : o.ex.p === 'hpush' || o.ex.p === 'vpush' ? '밀어' : '올려';
@@ -138,3 +184,95 @@ export function tempoFor(g: GuideSettings, exercise: string, goal: Goal | ''): s
 }
 
 export const appliesTo = (g: GuideSettings, exercise: string) => g.on && (!g.only.length || g.only.includes(exercise));
+
+/* ---------- 한 번에 쭉: the whole workout as one timeline ---------- */
+
+export interface RunItem {
+  key: string;
+  name: string;
+  p: Exercise['p'];
+  /** sets to do in this run */
+  sets: number;
+  /** set number of the first one (sets already done + 1) */
+  first: number;
+  reps: number;
+  /** seconds for holds */
+  hold: number;
+  kg: number;
+  tempo: string;
+  rest: number;
+  setup: number;
+  on: boolean;
+}
+
+export interface RunOpts { countdown: boolean; rhythm: boolean; restCues: boolean; move: number }
+
+export type RunAct = { k: 'begin' | 'set' | 'done'; key: string; setNo: number } | { k: 'finish' };
+
+export interface RunCue extends Cue {
+  act?: RunAct;
+  /** what's on screen from here on */
+  label?: string;
+  mode?: 'set' | 'rest' | 'move' | 'end';
+  /** when this part ends (timeline seconds) — rest/move countdown */
+  until?: number;
+  /** a set's "준비" line: where 이 세트 처음부터 / 다음으로 jump to */
+  mark?: boolean;
+  /** item index */
+  item?: number;
+  /** reps to do this set (null for holds) */
+  target?: number | null;
+  /** a timed set (hold): show the time left */
+  timed?: boolean;
+}
+
+const amount = (it: RunItem) => (rhythmKind({ n: it.name }) === 'hold' ? `${it.hold}초` : `${it.kg ? `${fmtKg(it.kg)}킬로 ` : ''}${it.reps}회`);
+const fmtKg = (kg: number) => (Number.isInteger(kg) ? String(kg) : kg.toFixed(1));
+const restWord = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}분${s % 60 ? ` ${s % 60}초` : ''}` : `${s}초`);
+
+/** Every set of every exercise in order: 준비(자세) → 3·2·1 → reps → rest → … → 이동 → next exercise. */
+export function buildRun(items: RunItem[], o: RunOpts): { cues: RunCue[]; length: number } {
+  const list = items.filter((i) => i.on && i.sets > 0);
+  const cues: RunCue[] = [];
+  let T = 0;
+  list.forEach((it, idx) => {
+    const last = it.first + it.sets - 1;
+    for (let k = 0; k < it.sets; k++) {
+      const setNo = it.first + k;
+      const intro = k === 0
+        ? (idx === 0 ? `${it.name}, ${it.sets}세트, ${amount(it)}. ${setNo}세트 준비` : `${it.name} ${setNo}세트 준비`)
+        : `${setNo}세트 준비`;
+      const { cues: sc, length } = setCues({
+        setNo, reps: it.reps, tempo: it.tempo, ex: { n: it.name, p: it.p }, countdown: o.countdown, rhythm: o.rhythm, setup: it.setup,
+        intro: it.setup >= 4 ? `${intro}, 자세 잡으세요` : intro, hold: rhythmKind({ n: it.name }) === 'hold' ? it.hold : undefined,
+      });
+      cues.push({ t: T, mark: true, item: idx, target: rhythmKind({ n: it.name }) === 'hold' ? null : it.reps, timed: rhythmKind({ n: it.name }) === 'hold', mode: 'set', label: `${it.name} · ${setNo}/${last}세트`, until: T + length, rep: 0, phase: '준비', act: k === 0 ? { k: 'begin', key: it.key, setNo } : undefined });
+      for (const c of sc) cues.push({ ...c, t: r1(T + c.t), end: undefined, ...(c.end ? { act: { k: 'set' as const, key: it.key, setNo } } : {}) });
+      T = r1(T + length);
+      const next = k < it.sets - 1 ? { item: it, setNo: setNo + 1 } : null;
+      if (next) {
+        const nextIntro = `${setNo + 1}세트 준비${it.setup >= 4 ? ', 자세 잡으세요' : ''}`;
+        const lead = leadTime({ countdown: o.countdown, setup: it.setup, intro: nextIntro });
+        const wait = Math.max(0, it.rest - lead);
+        cues.push({ t: T + 0.01, timed: false, mode: 'rest', label: `휴식 · 다음 ${setNo + 1}/${last}세트`, until: r1(T + it.rest), phase: '휴식' });
+        if (o.restCues) for (const c of restCues(it.rest, setNo + 1, true)) if (c.t < wait - 1) cues.push({ ...c, t: r1(T + c.t + 1.2) });
+        T = r1(T + wait);
+      }
+    }
+    cues.push({ t: T + 0.02, act: { k: 'done', key: it.key, setNo: last } });
+    const nx = list[idx + 1];
+    if (nx) {
+      const intro = `${nx.name} ${nx.first}세트 준비${nx.setup >= 4 ? ', 자세 잡으세요' : ''}`;
+      const lead = leadTime({ countdown: o.countdown, setup: nx.setup, intro });
+      const gap = Math.max(o.move, it.rest);
+      const wait = Math.max(0, gap - lead);
+      cues.push({ t: T + 1.2, timed: false, mode: 'move', label: `이동 · 다음 ${nx.name}`, until: r1(T + gap), phase: '이동',
+        say: `다음은 ${nx.name}, ${nx.sets}세트, ${amount(nx)}. ${restWord(gap)} 뒤 시작해요` });
+      if (o.restCues && gap > 25) cues.push({ t: r1(T + gap - lead - 10), say: '10초 뒤 준비' });
+      T = r1(T + wait);
+    }
+  });
+  if (list.length) cues.push({ t: T + 1, mode: 'end', label: '오늘 가이드 끝', say: '오늘 운동 끝. 수고했어요', buzz: true, phase: '끝', act: { k: 'finish' } });
+  cues.sort((a, b) => a.t - b.t);
+  return { cues, length: T + 1 };
+}

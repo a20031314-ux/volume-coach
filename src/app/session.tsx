@@ -1,10 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AppState, ScrollView, View } from 'react-native';
+import { AppState, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExName } from '@/components/exercise-menu';
-import { GuidePanel } from '@/components/guide-panel';
 import { Sheet } from '@/components/layout';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, Chip, ConfirmButton, Pills, Row, Segmented, Stepper, T } from '@/components/ui';
@@ -12,10 +11,10 @@ import { Radius, Space, usePalette } from '@/constants/theme';
 import { knownExercises, pickable } from '@/lib/ability';
 import { MUSCLES, MUSCLE_NAME } from '@/lib/exercises';
 import { repRange } from '@/lib/profile';
-import { appliesTo } from '@/lib/guide';
 import { fmtDuration } from '@/lib/run';
 import { lastPerformance, prefill, restSeconds, setCount, shouldAutoEnd, summarize } from '@/lib/session';
 import type { MuscleKey, Session, SessionExercise } from '@/lib/types';
+import { useGuide } from '@/store/guide-player';
 import { addRest, buzz, startRest, stopRest, useRest } from '@/store/rest-timer';
 import {
   addExercise, completeExercise, completeSet, discardSession, finishSession, makeActive, reopenExercise,
@@ -89,9 +88,10 @@ export default function SessionScreen() {
             </Row>}
       </Row>
 
-      {ended ? <Summary session={session} now={now} /> : (
+      {ended ? <Summary session={session} now={now} /> : (<>
+        <GuideEntry id={session.id} />
         <RestBar />
-      )}
+      </>)}
 
       <View>
         {session.exercises.map((ex, i) => (
@@ -178,7 +178,7 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
   const opts = useData((s) => s.settings.session);
   const goal = useData((s) => s.settings.profile.goal);
   const profile = useData((s) => s.settings.profile);
-  const guideOn = useData((s) => (s.settings.guide ? appliesTo(s.settings.guide, ex.name) : false));
+  const guided = useGuide((g) => g.sessionId === session.id && g.status !== 'idle' && g.status !== 'done');
   const p = prefill(ex, lastPerf);
   const [kg, setKg] = useState<number>(p.kg ?? 0);
   const [reps, setReps] = useState<number>(p.reps ?? 10);
@@ -191,8 +191,6 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
   const rest = restSeconds(ex.name, goal || undefined);
   const setMode = session.detail === 'set';
   const n = ex.sets.length;
-  const next = session.exercises.find((e) => e.key !== ex.key && e.status === 'pending') ?? null;
-  const guide = <GuidePanel ex={ex} session={session} kg={kg} reps={reps} rest={rest} next={next} />;
 
   const doneSet = () => {
     completeSet(session.id, ex.key, opts.setInputs ? { kg: kg || null, reps: reps || null, rpe: opts.setRpe ? rpe : null } : { rpe: opts.setRpe ? rpe : null });
@@ -246,8 +244,8 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
                 onToggle={(k) => setRpe(rpe === Number(k) ? null : Number(k))} />
             </View>
           ) : null}
-          {n < ex.planned ? guide : null}
-          <Button label={`${n + 1}세트 완료`} kind={guideOn && n < ex.planned ? 'default' : 'primary'} onPress={doneSet} style={{ paddingVertical: 14 }} />
+          {guided ? <T v="small" style={{ color: c.accent }}>가이드가 설계한 무게·횟수로 세트를 기록하고 있어요</T>
+            : <Button label={`${n + 1}세트 완료`} kind="primary" onPress={doneSet} style={{ paddingVertical: 14 }} />}
           <Row>
             {n ? <Button label="마지막 세트 취소" kind="ghost" onPress={() => undoSet(session.id, ex.key)} /> : null}
             <View style={{ flex: 1 }} />
@@ -257,7 +255,6 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
         </>
       ) : (
         <>
- {guide}
           <Row gap={Space.md}><Stepper label="세트 수" value={count} onChange={setCountState} min={1} max={20} /></Row>
           <Row style={{ flexWrap: 'nowrap' }}>
             <Button label="건너뛰기" onPress={() => skipExercise(session.id, ex.key)} style={{ flex: 1 }} />
@@ -266,6 +263,29 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
         </>
       )}
     </Card>
+  );
+}
+
+/** 가이드로 쭉 하기 (미리 설계 → 끝까지 음성 진행) */
+function GuideEntry({ id }: { id: string }) {
+  const c = usePalette();
+  const g = useData((s) => s.settings.guide);
+  const st = useGuide();
+  const go = () => router.push({ pathname: '/session-guide', params: { id } });
+  if (st.sessionId === id && st.status !== 'idle') {
+    return (
+      <Pressable accessibilityRole="button" onPress={go} style={{ backgroundColor: c.accent, borderRadius: Radius.md, padding: Space.md }}>
+        <T style={{ color: c.accentInk, fontWeight: '700' }}>{st.status === 'paused' ? '❚❚ 가이드 일시정지' : '● 가이드 진행 중'} · {st.label} ›</T>
+      </Pressable>
+    );
+  }
+  if (g && !g.on) return null;
+  return (
+    <Pressable accessibilityRole="button" onPress={g ? go : () => router.push('/prefs/guide')}
+      style={{ backgroundColor: c.accentSoft, borderRadius: Radius.md, padding: Space.md, gap: 2 }}>
+      <T style={{ color: c.accent, fontWeight: '700' }}>{g ? '▶ 가이드로 쭉 하기 ›' : '가이드 모드 들어보기 ›'}</T>
+      <T v="small">{g ? '세트·횟수·휴식·자세 잡는 시간을 미리 정하고, 끝까지 음성으로 이어서 진행해요' : '준비 3·2·1, 반복 리듬, 휴식 끝 알림을 음성으로 안내해요'}</T>
+    </Pressable>
   );
 }
 

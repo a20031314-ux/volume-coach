@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LIBRARY } from '../exercises';
-import { appliesTo, countWord, DEFAULT_GUIDE, describeTempo, parseTempo, restCues, rhythmKind, setCues, tempoFor } from '../guide';
+import { appliesTo, buildRun, countWord, DEFAULT_GUIDE, describeTempo, parseTempo, restCues, rhythmKind, setCues, setupFor, tempoFor, type RunItem } from '../guide';
 
 const ex = (n: string) => LIBRARY.find((e) => e.n === n)!;
 
@@ -50,4 +50,36 @@ describe('가이드 모드', () => {
     expect(tempoFor(g, '랫풀다운', 'hyp')).toBe('3-0-1-0');
     expect(tempoFor({ ...g, tempo: '2-0-2-0' }, '랫풀다운', 'str')).toBe('2-0-2-0');
   });
+  it('waits for 자세 잡기 before 3·2·1 on barbell lifts', () => {
+    expect(setupFor(ex('바벨 벤치프레스'))).toBe(10);
+    expect(setupFor(ex('백스쿼트'))).toBe(12);
+    expect(setupFor(ex('랫풀다운'))).toBe(4);
+    const { cues } = setCues({ setNo: 1, reps: 1, tempo: '2-0-2-0', ex: ex('바벨 벤치프레스'), countdown: true, rhythm: true, setup: 10, intro: '1세트 준비, 자세 잡으세요' });
+    expect(cues.find((c) => c.say === '3')?.t).toBe(10);
+    expect(cues.find((c) => c.say === '시작')?.t).toBe(13);
+  });
+  it('builds the whole workout: sets, rest that ends on 시작, move to the next exercise', () => {
+    const item = (name: string, p: RunItem['p'], o: Partial<RunItem> = {}): RunItem => ({
+      key: name, name, p, sets: 2, first: 1, reps: 2, hold: 30, kg: 60, tempo: '2-0-2-0', rest: 60, setup: 10, on: true, ...o,
+    });
+    const { cues, length } = buildRun([item('바벨 벤치프레스', 'hpush'), item('플랭크', 'core', { setup: 0, kg: 0, rest: 30, sets: 1 }), item('랫풀다운', 'vpull', { on: false })],
+      { countdown: true, rhythm: true, restCues: true, move: 90 });
+    const acts = cues.filter((c) => c.act).map((c) => (c.act!.k === 'finish' ? 'finish' : `${c.act!.k}:${c.act!.key}:${c.act!.setNo}`));
+    expect(acts).toEqual(['begin:바벨 벤치프레스:1', 'set:바벨 벤치프레스:1', 'set:바벨 벤치프레스:2', 'done:바벨 벤치프레스:2',
+      'begin:플랭크:1', 'set:플랭크:1', 'done:플랭크:1', 'finish']);
+    // the 2nd set's 시작 lands exactly 60s after the 1st set ended
+    const end1 = cues.find((c) => c.act?.k === 'set')!.t;
+    const start2 = cues.filter((c) => c.say === '시작')[1].t;
+    expect(start2 - end1).toBeCloseTo(60, 0);
+    // 90s to move on, plank held 30s
+    const end2 = cues.filter((c) => c.act?.k === 'set')[1].t;
+    const start3 = cues.filter((c) => c.say === '시작')[2].t;
+    expect(start3 - end2).toBeCloseTo(90, 0);
+    expect(cues.find((c) => c.mode === 'move')?.say).toContain('다음은 플랭크, 1세트, 30초');
+    expect(cues.filter((c) => c.act?.k === 'set')[2 - 1 + 1].t - start3).toBeCloseTo(30, 0);
+    expect(cues.some((c) => c.say?.includes('랫풀다운'))).toBe(false);
+    expect(length).toBeGreaterThan(start3 + 30);
+    expect(cues.every((c, i) => i === 0 || c.t >= cues[i - 1].t)).toBe(true);
+  });
 });
+

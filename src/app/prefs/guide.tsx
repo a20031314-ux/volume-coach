@@ -1,16 +1,16 @@
 /**
  * 가이드 모드 설정: 기본값을 먼저 들려주고(들어보기) 사용자가 고른다.
- * 켜기/끄기 · 템포 · 음성/진동 · 시작 카운트다운 / 반복 리듬 / 세트 사이 휴식 안내 · 적용 종목.
+ * 켜기/끄기 · 템포 · 음성/진동 · 카운트다운 / 반복 리듬 / 휴식 알림 · 자세 잡는 시간·이동 시간 · 기본 종목.
  */
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { SavePage } from '@/components/save-bar';
-import { Button, Card, Field, Pills, Row, Segmented, T } from '@/components/ui';
+import { Button, Card, Field, Pills, Row, Segmented, Stepper, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { library } from '@/lib/exercises';
-import { DEFAULT_GUIDE, GOAL_TEMPO, TEMPO_CHOICES, describeTempo, restCues, setCues, type GuideSettings } from '@/lib/guide';
+import { buildRun, DEFAULT_GUIDE, GOAL_TEMPO, TEMPO_CHOICES, describeTempo, setupFor, type GuideSettings } from '@/lib/guide';
 import { preview, stopGuide } from '@/store/guide-player';
 import { live, useData } from '@/store/store';
 
@@ -22,7 +22,7 @@ const TEMPO_NOTE: Record<string, string> = {
   '2-0-X-0': '내리고 폭발적으로 · 근력',
   '3-1-1-1': '바닥·꼭대기에서 1초씩 멈춤',
 };
-const SAMPLE = { n: '벤치프레스', p: 'hpush' as const };
+const SAMPLE = { n: '바벨 벤치프레스', p: 'hpush' as const };
 
 function Toggle({ label, sub, on, onChange }: { label: string; sub?: string; on: boolean; onChange: (v: boolean) => void }) {
   const c = usePalette();
@@ -55,11 +55,14 @@ export default function GuidePrefs() {
 
   const listen = (key: string, t: string, withRest = false) => {
     if (playing === key) { stopGuide(); setPlaying(null); return; }
-    const { cues, length } = setCues({ setNo: 2, reps: 3, tempo: t, ex: SAMPLE, countdown: g.countdown, rhythm: g.reps });
-    const all = withRest ? [...restCues(20, 2, g.countdown), ...cues.map((x) => ({ ...x, t: x.t + 20 - (g.countdown ? 4.6 : 0) }))] : cues;
-    preview(all, { voice: true, haptic: g.haptic });
+    // the same timeline as a real run: 벤치프레스 60kg × 3, 자세 잡기, (휴식 20초 → 2세트)
+    const { cues, length } = buildRun([{
+      key: 'sample', name: SAMPLE.n, p: SAMPLE.p, sets: withRest ? 2 : 1, first: 1, reps: 3, hold: 30, kg: 60, tempo: t,
+      rest: 20, setup: g.setup ?? setupFor(SAMPLE), on: true,
+    }], { countdown: g.countdown, rhythm: g.reps, restCues: g.rest, move: 60 });
+    preview(cues, { voice: true, haptic: g.haptic });
     setPlaying(key);
-    setTimeout(() => setPlaying((p) => (p === key ? null : p)), ((withRest ? 20 : 0) + length + 1.5) * 1000);
+    setTimeout(() => setPlaying((p) => (p === key ? null : p)), (length + 1.5) * 1000);
   };
 
   // exercises to choose from: the ones done recently first, then search the whole library
@@ -75,15 +78,15 @@ export default function GuidePrefs() {
   return (
     <SavePage dirty={dirty} onSave={() => { stopGuide(); save(); }} onReset={reset}>
       <Card>
-        <T v="title" style={{ fontSize: 16 }}>세트를 음성으로 안내해요</T>
-        <T v="muted">“2세트 준비, 3, 2, 1, 시작” → “내리고… 올려, 하나” → “2세트 끝” → 휴식 “30초 남았어요” → 다음 세트 카운트다운</T>
+        <T v="title" style={{ fontSize: 16 }}>운동 전에 설계하고, 끝까지 음성으로 쭉</T>
+        <T v="muted">운동 화면의 “▶ 가이드로 쭉 하기”에서 종목별 세트·횟수·휴식을 맞추고 시작 → “벤치프레스 1세트 준비, 자세 잡으세요” → 3, 2, 1, 시작 → “내리고… 밀어, 하나” → 휴식 → 다음 세트 → 다음 운동. 진행 중엔 일시정지만 누르면 돼요.</T>
         <Segmented options={[{ v: 'off', n: '끔' }, { v: 'on', n: '켜기' }]} value={g.on ? 'on' : 'off'} onChange={(v) => v && set({ on: v === 'on' })} />
       </Card>
 
       <T v="label">기본값 먼저 들어보기</T>
       <Card style={{ gap: Space.sm }}>
         <T>{GOAL_WORD[goal]} 기본 템포 <T style={{ fontWeight: '700' }}>{goalTempo}</T></T>
-        <T v="small">{describeTempo(goalTempo)} · 벤치프레스 3회 예시</T>
+        <T v="small">{describeTempo(goalTempo)} · 바벨 벤치프레스 60kg × 3회 예시 (자세 잡기 {g.setup ?? setupFor(SAMPLE)}초 포함)</T>
         <Row style={{ flexWrap: 'nowrap' }}>
           <Button label={playing === 'set' ? '■ 멈추기' : '▶ 한 세트 들어보기'} kind="primary" onPress={() => listen('set', goalTempo)} style={{ flex: 1 }} />
           <Button label={playing === 'rest' ? '■ 멈추기' : '▶ 휴식 → 다음 세트'} onPress={() => listen('rest', goalTempo, true)} style={{ flex: 1 }} />
@@ -118,7 +121,17 @@ export default function GuidePrefs() {
       <Card style={{ gap: 0 }}>
         <Toggle label="시작 카운트다운" sub="“n세트 준비, 3, 2, 1, 시작”" on={g.countdown} onChange={(countdown) => set({ countdown })} />
         <Toggle label="반복 리듬" sub={`템포에 맞춰 “내리고… 올려, 하나” (지금 ${tempo})`} on={g.reps} onChange={(reps) => set({ reps })} />
-        <Toggle label="세트 사이 휴식 안내" sub="남은 시간 알림 + 휴식 끝에 다음 세트 자동 시작. 끄면 세트가 끝난 뒤 직접 눌러 시작" on={g.rest} onChange={(rest) => set({ rest })} />
+        <Toggle label="휴식 중 남은 시간 알림" sub="“30초 남았어요”, “10초 남았어요”. 꺼도 휴식이 끝나면 다음 세트는 시작해요" on={g.rest} onChange={(rest) => set({ rest })} />
+      </Card>
+
+      <T v="label">기본 시간 (설계 화면에서 종목별로 바꿀 수 있어요)</T>
+      <Card style={{ gap: Space.sm }}>
+        <T>자세 잡는 시간</T>
+        <T v="small">“준비, 자세 잡으세요” 뒤 3·2·1까지 기다리는 시간. 바벨 스쿼트 12초 · 데드리프트·벤치 10초 · 덤벨 6초 · 머신 4초</T>
+        <Segmented options={[{ v: 'auto', n: '종목별 자동' }, { v: 'fix', n: '모두 같게' }]} value={g.setup == null ? 'auto' : 'fix'}
+          onChange={(v) => v && set({ setup: v === 'auto' ? null : g.setup ?? 6 })} />
+        {g.setup != null ? <Stepper label="모든 종목" value={g.setup} onChange={(setup) => set({ setup })} step={2} min={0} max={30} format={(v) => `${v}초`} /> : null}
+        <Stepper label="운동 사이 이동" value={g.move ?? 60} onChange={(move) => set({ move })} step={15} min={15} max={300} format={(v) => (v >= 60 ? `${Math.floor(v / 60)}분${v % 60 ? ` ${v % 60}초` : ''}` : `${v}초`)} />
       </Card>
 
       <T v="label">안내 방법</T>
@@ -128,7 +141,7 @@ export default function GuidePrefs() {
         {!g.voice && !g.haptic ? <T v="small" style={{ color: c.warn }}>둘 다 끄면 화면 숫자로만 안내해요</T> : null}
       </Card>
 
-      <T v="label">적용 종목</T>
+      <T v="label">설계할 때 기본으로 넣을 종목</T>
       <Card style={{ gap: Space.sm }}>
         <Segmented options={[{ v: 'all', n: '모든 종목' }, { v: 'only', n: '고른 종목만' }]} value={pickMode ? 'only' : 'all'}
           onChange={(v) => { if (!v) return; setPickMode(v === 'only'); if (v === 'all') { set({ only: [] }); setQ(''); } }} />
@@ -136,8 +149,8 @@ export default function GuidePrefs() {
           <Field label="종목 찾기" value={q} onChangeText={setQ} placeholder="예: 스쿼트" />
           {picks.length ? <Pills options={picks.map((n) => ({ k: n, n }))} value={g.only} onToggle={toggleEx} />
             : <T v="small">{q.trim() ? '찾는 종목이 없어요' : '운동을 하면 자주 하는 종목이 여기 먼저 보여요. 위에서 찾아 고르세요.'}</T>}
-          <T v="small">{g.only.length ? `${g.only.length}종목만 가이드: ${g.only.join(', ')}` : '하나도 안 고르면 모든 종목에 적용돼요'}</T>
-        </>) : <T v="small">운동 화면의 모든 종목에 “▶ 세트 시작 · 가이드” 버튼이 나와요.</T>}
+          <T v="small">{g.only.length ? `${g.only.length}종목만 체크된 채로 시작: ${g.only.join(', ')}` : '하나도 안 고르면 모든 종목이 들어가요'}</T>
+        </>) : <T v="small">설계 화면에서 오늘 운동이 모두 체크된 채로 나와요. 빼고 싶은 건 거기서 체크 해제.</T>}
       </Card>
 
       <T v="small">안내 중엔 화면이 꺼지지 않아요. 화면을 끄거나 다른 앱으로 가면 음성이 멈출 수 있어요(특히 iPhone).</T>

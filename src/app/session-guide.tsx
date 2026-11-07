@@ -1,0 +1,211 @@
+/**
+ * 가이드로 쭉 하기: 운동 전에 종목별 세트·횟수·무게·휴식·자세 잡는 시간을 미리 설계하고,
+ * 시작하면 끝까지 음성으로 이어서 진행한다. 진행 중엔 일시정지만, 멈췄을 때 이어서/처음부터/넘기기/끝내기.
+ */
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+import { Button, Card, ConfirmButton, Meter, Pills, Row, Stepper, T } from '@/components/ui';
+import { Space, usePalette } from '@/constants/theme';
+import { library } from '@/lib/exercises';
+import {
+  buildRun, DEFAULT_GUIDE, describeTempo, GOAL_TEMPO, rhythmKind, setupFor, tempoFor, TEMPO_CHOICES, type RunAct, type RunItem,
+} from '@/lib/guide';
+import { fmtDuration } from '@/lib/run';
+import { lastPerformance, prefill, restSeconds } from '@/lib/session';
+import { canRestart, pauseRun, restartSet, resumeRun, skipAhead, startRun, stopRun, useGuide } from '@/store/guide-player';
+import { stopRest } from '@/store/rest-timer';
+import { completeExercise, completeSet, finishSession, makeActive } from '@/store/session-actions';
+import { live, useData } from '@/store/store';
+
+const mmss = (s: number) => fmtDuration(Math.max(0, Math.round(s)));
+const restText = (s: number) => (s >= 60 ? `${Math.floor(s / 60)}분${s % 60 ? ` ${s % 60}초` : ''}` : `${s}초`);
+
+export default function SessionGuide() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const session = useData((s) => (id ? s.sessions[id] : undefined));
+  const st = useGuide();
+  const mine = st.sessionId === id && st.status !== 'idle';
+  if (!session) return null;
+  return mine ? <RunView id={session.id} /> : <PlanView id={session.id} />;
+}
+
+/* ---------- 설계 ---------- */
+
+function PlanView({ id }: { id: string }) {
+  const c = usePalette();
+  const insets = useSafeAreaInsets();
+  const session = useData((s) => s.sessions[id]);
+  const settings = useData((s) => s.settings);
+  const sessionsT = useData((s) => s.sessions);
+  const logsT = useData((s) => s.logs);
+  const g = { ...DEFAULT_GUIDE, ...(settings.guide ?? {}) };
+  const goal = settings.profile.goal;
+  const setMode = session.detail === 'set';
+  const lib = useMemo(() => library(settings.customExercises), [settings.customExercises]);
+
+  const [items, setItems] = useState<RunItem[]>(() => session.exercises
+    .filter((e) => e.status === 'pending' || e.status === 'active')
+    .map((e) => {
+      const ex = lib.find((x) => x.n === e.name) ?? { n: e.name, p: 'core' as const };
+      const done = setMode ? e.sets.length : 0;
+      const p = prefill(e, lastPerformance(e.name, live(sessionsT), live(logsT), session.id));
+      return {
+        key: e.key, name: e.name, p: ex.p, first: done + 1, sets: Math.max(0, e.planned - done),
+        reps: e.target?.reps ?? p.reps ?? 10, hold: 30, kg: e.target?.kg ?? p.kg ?? 0,
+        tempo: tempoFor(g, e.name, goal), rest: restSeconds(e.name, goal || undefined),
+        setup: g.setup ?? setupFor(ex), on: !g.only.length || g.only.includes(e.name),
+      };
+    }));
+  const [move, setMove] = useState(g.move ?? 60);
+  const [open, setOpen] = useState<string | null>(null);
+  const opts = { countdown: g.countdown, rhythm: g.reps, restCues: g.rest, move };
+  const run = buildRun(items, opts);
+  const on = items.filter((i) => i.on && i.sets > 0);
+  const edit = (key: string, patch: Partial<RunItem>) => setItems((l) => l.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+
+  const start = () => {
+    const byKey = new Map(items.map((i) => [i.key, i]));
+    const act = (a: RunAct) => {
+      if (a.k === 'finish') return;
+      const it = byKey.get(a.key);
+      if (!it) return;
+      if (a.k === 'begin') makeActive(id, a.key);
+      else if (a.k === 'set' && setMode) {
+        completeSet(id, a.key, { kg: it.kg || null, reps: rhythmKind({ n: it.name }) === 'hold' ? null : it.reps, rpe: null });
+      } else if (a.k === 'done') completeExercise(id, a.key, setMode ? undefined : a.setNo);
+    };
+    void stopRest();
+    startRun(id, run, { voice: g.voice, haptic: g.haptic }, act);
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <ScrollView contentContainerStyle={{ padding: Space.lg, gap: Space.md, paddingBottom: 120, maxWidth: 680, width: '100%', alignSelf: 'center' }}>
+        <T v="muted">운동 전에 한 번 맞춰두면, 시작부터 끝까지 음성으로 이어서 안내해요. 진행 중엔 일시정지만 누르면 돼요.</T>
+
+        {items.length ? items.map((it) => {
+          const kind = rhythmKind({ n: it.name });
+          const expanded = open === it.key;
+          return (
+            <Card key={it.key} style={{ gap: Space.sm, opacity: it.on ? 1 : 0.55 }}>
+              <Row style={{ flexWrap: 'nowrap' }}>
+                <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: it.on }} accessibilityLabel={`${it.name} 가이드에 넣기`}
+                  onPress={() => edit(it.key, { on: !it.on })}
+                  style={{ width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: it.on ? c.accent : c.line, backgroundColor: it.on ? c.accent : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                  {it.on ? <T style={{ color: c.accentInk, fontWeight: '800', lineHeight: 18 }}>✓</T> : null}
+                </Pressable>
+                <Pressable accessibilityRole="button" onPress={() => setOpen(expanded ? null : it.key)} style={{ flex: 1 }}>
+                  <T style={{ fontWeight: '700' }}>{it.name}{it.first > 1 ? ` · ${it.first}세트부터` : ''}</T>
+                  <T v="small">
+                    {it.sets}세트 × {kind === 'hold' ? `${it.hold}초` : `${it.kg ? `${it.kg}kg × ` : ''}${it.reps}회`} · 휴식 {restText(it.rest)} · 자세 {it.setup}초{kind === 'rhythm' && g.reps ? ` · ${it.tempo}` : ''}
+                  </T>
+                </Pressable>
+                <Button label={expanded ? '닫기' : '수정'} kind="ghost" onPress={() => setOpen(expanded ? null : it.key)} />
+              </Row>
+              {expanded ? (<>
+                <Row gap={Space.md}>
+                  <Stepper label="세트" value={it.sets} onChange={(sets) => edit(it.key, { sets })} min={1} max={12} />
+                  {kind === 'hold'
+                    ? <Stepper label="버티기 (초)" value={it.hold} onChange={(hold) => edit(it.key, { hold })} step={5} min={10} max={180} />
+                    : <Stepper label="반복" value={it.reps} onChange={(reps) => edit(it.key, { reps })} min={1} max={30} />}
+                </Row>
+                {kind !== 'hold' ? <Row gap={Space.md}><Stepper label="무게 kg" value={it.kg} onChange={(kg) => edit(it.key, { kg })} step={2.5} min={0} max={400} /></Row> : null}
+                <Row gap={Space.md}>
+                  <Stepper label="세트 간 휴식" value={it.rest} onChange={(rest) => edit(it.key, { rest })} step={15} min={15} max={600} format={restText} />
+                  <Stepper label="자세 잡는 시간" value={it.setup} onChange={(setup) => edit(it.key, { setup })} step={2} min={0} max={30} format={(v) => `${v}초`} />
+                </Row>
+                <T v="small">자세 잡는 시간: “준비, 자세 잡으세요” 뒤 이만큼 기다렸다가 3·2·1. 바벨은 랙에서 빼고 호흡 잡는 시간까지.</T>
+                {kind === 'rhythm' && g.reps ? (
+                  <View style={{ gap: 6 }}>
+                    <T v="muted">템포 · {describeTempo(it.tempo)}</T>
+                    <Pills options={[GOAL_TEMPO[goal], ...TEMPO_CHOICES.filter((t) => t !== GOAL_TEMPO[goal])].map((t) => ({ k: t, n: t }))} value={it.tempo}
+                      onToggle={(tempo) => edit(it.key, { tempo })} />
+                  </View>
+                ) : null}
+              </>) : null}
+            </Card>
+          );
+        }) : <Card><T>남은 운동이 없어요</T></Card>}
+
+        {items.length > 1 ? (
+          <Card>
+            <Stepper label="운동 사이 이동 (휴식보다 짧으면 휴식만큼)" value={move} onChange={setMove} step={15} min={15} max={300} format={restText} />
+            <T v="small">“다음은 랫풀다운, 3세트…”를 알려주고 이 시간 뒤 다음 운동 1세트를 시작해요.</T>
+          </Card>
+        ) : null}
+
+        <Pressable accessibilityRole="button" onPress={() => router.push('/prefs/guide')}>
+          <T v="small">음성 {g.voice ? '켬' : '끔'} · 진동 {g.haptic ? '켬' : '끔'} · 카운트다운 {g.countdown ? '켬' : '끔'} · 반복 리듬 {g.reps ? '켬' : '끔'} · 휴식 안내 {g.rest ? '켬' : '끔'}  <T v="small" style={{ color: c.accent }}>기본값 바꾸기 ›</T></T>
+        </Pressable>
+      </ScrollView>
+
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: Space.md, paddingBottom: insets.bottom + Space.md, backgroundColor: c.surface, borderTopWidth: 1, borderColor: c.line, gap: 4 }}>
+        <T v="small" style={{ textAlign: 'center' }}>{on.length}종목 · {on.reduce((a, i) => a + i.sets, 0)}세트 · 예상 {Math.round(run.length / 60)}분</T>
+        <Button label="▶ 가이드 시작" kind="primary" onPress={start} disabled={!on.length} style={{ paddingVertical: 14, maxWidth: 680, width: '100%', alignSelf: 'center' }} />
+      </View>
+    </View>
+  );
+}
+
+/* ---------- 진행 ---------- */
+
+function RunView({ id }: { id: string }) {
+  const c = usePalette();
+  const insets = useSafeAreaInsets();
+  const st = useGuide();
+  const session = useData((s) => s.sessions[id]);
+
+  const left = st.until - st.at;
+  const counting = st.mode === 'rest' || st.mode === 'move' || (st.timed && st.phase !== '준비' && st.phase !== '자세 잡기');
+  const target = st.target;
+  const nextUp = session.exercises.find((e) => e.status === 'pending');
+
+  if (st.status === 'done') {
+    return (
+      <View style={{ flex: 1, backgroundColor: c.bg, padding: Space.lg, gap: Space.md, paddingBottom: insets.bottom + Space.lg }}>
+        <T v="big">가이드 끝</T>
+        <T v="muted">세트는 설계한 무게·횟수로 기록됐어요. 다르게 했으면 운동 화면에서 고칠 수 있어요.</T>
+        <Button label="운동 끝내기" kind="primary" onPress={() => { finishSession(id); stopRun(); router.back(); }} style={{ paddingVertical: 14 }} />
+        <Button label="운동 화면으로 (더 하기)" onPress={() => { stopRun(); router.back(); }} />
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg, padding: Space.lg, paddingBottom: insets.bottom + Space.lg, gap: Space.md }}>
+      <View style={{ gap: 4 }}>
+        <Meter pct={st.length ? (st.at / st.length) * 100 : 0} color={c.accent} />
+        <T v="small">{mmss(st.at)} 지남 · 남은 시간 약 {Math.max(1, Math.round((st.length - st.at) / 60))}분</T>
+      </View>
+
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: Space.sm }}>
+        <T v="title" style={{ textAlign: 'center' }}>{st.label}</T>
+        {counting ? (
+          <T v="big" style={{ fontSize: 88, lineHeight: 96, color: c.accent }}>{mmss(left)}</T>
+        ) : (
+          <T v="big" style={{ fontSize: 96, lineHeight: 104, color: c.accent }}>{st.rep}{target ? <T v="title" style={{ color: c.muted }}> / {target}</T> : null}</T>
+        )}
+        <T style={{ fontSize: 22, fontWeight: '700', minHeight: 30 }}>{st.phase}</T>
+        {counting && nextUp && st.mode === 'move' ? <T v="muted">{nextUp.name} 기구로 이동하세요</T> : null}
+      </View>
+
+      {st.status === 'paused' ? (
+        <View style={{ gap: Space.sm }}>
+          <T v="label" style={{ textAlign: 'center' }}>일시정지됨</T>
+          <Button label="▶ 이어서" kind="primary" onPress={resumeRun} style={{ paddingVertical: 16 }} />
+          <Row style={{ flexWrap: 'nowrap' }}>
+            <Button label="이 세트 처음부터" onPress={() => { restartSet(); resumeRun(); }} disabled={!canRestart(st.at)} style={{ flex: 1 }} />
+            <Button label="다음으로 넘기기" onPress={() => { skipAhead(); resumeRun(); }} style={{ flex: 1 }} />
+          </Row>
+          <T v="small" style={{ textAlign: 'center' }}>넘기기: 세트 중이면 설계대로 기록하고 휴식으로, 휴식 중이면 다음 세트로</T>
+          <ConfirmButton label="가이드 끝내기" confirmLabel="끝내기 (지금까지 기록은 남음)" onConfirm={() => { stopRun(); router.back(); }} style={{ alignSelf: 'center' }} />
+        </View>
+      ) : (
+        <Button label="❚❚ 일시정지" kind="primary" onPress={pauseRun} style={{ paddingVertical: 22 }} accessibilityLabel="일시정지" />
+      )}
+    </View>
+  );
+}
