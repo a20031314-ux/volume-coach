@@ -11,12 +11,14 @@ import { hhmm } from '@/lib/meal-plan';
 import type { SwapPart } from '@/lib/swap';
 import { markMissing, useMissing, type PlannedMeal } from '@/hooks/use-meal-plan';
 
-export function MealRecCard({ meal, onEat }: { meal: PlannedMeal; onEat: (parts: SwapPart[]) => void }) {
+/** `bare`: no card frame, for use inside another card. */
+export function MealRecCard({ meal, onEat, bare }: { meal: PlannedMeal; onEat: (parts: SwapPart[]) => void; bare?: boolean }) {
   const c = usePalette();
   const missing = useMissing((s) => (s.date === today() ? s.foods.length : 0));
   const { rec } = meal;
+  const Box = bare ? View : Card;
   return (
-    <Card style={{ gap: Space.sm }}>
+    <Box style={{ gap: Space.sm }}>
       <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
         <T v="title" style={{ fontSize: 15 }}>{meal.name} 추천 · {hhmm(meal.min)}</T>
         <Button label="시간" kind="ghost" onPress={() => router.push('/prefs/meal-plan')} />
@@ -42,6 +44,6 @@ export function MealRecCard({ meal, onEat }: { meal: PlannedMeal; onEat: (parts:
         ) : null}
         <Button label="먹은 음식에 추가" kind="primary" onPress={() => onEat(rec.parts)} style={{ flex: 2, paddingVertical: 12 }} />
       </Row>
-    </Card>
+    </Box>
   );
 }

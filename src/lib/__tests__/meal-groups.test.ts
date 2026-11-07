@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { groupMeals, warnText } from '../meal-groups';
+import { groupMeals, mealTimeline, warnText } from '../meal-groups';
 import type { Meal } from '../types';
 
 let id = 0;
@@ -33,5 +33,24 @@ describe('groupMeals', () => {
     const g = groupMeals([meal(8, 500)], null);
     expect(g[0].pct).toBeNull();
     expect(g[0].warns).toEqual([]);
+  });
+});
+
+describe('mealTimeline', () => {
+  it('puts pending items and the recommendation into their meal, creating empty meals', () => {
+    const g = groupMeals([meal(8, 400), meal(12, 600)], goal);
+    const t = mealTimeline(g, [{ id: 'crea', min: 13 * 60 }, { id: 'mag', min: 22 * 60 }], { id: 'rec', min: 19 * 60 });
+    expect(t.map((x) => x.name)).toEqual(['아침', '점심', '저녁', '밤']);
+    expect(t[1].group?.sum.k).toBe(600);
+    expect(t[1].pending.map((p) => p.id)).toEqual(['crea']);
+    expect(t[2].group).toBeNull();
+    expect(t[2].rec?.id).toBe('rec');
+    expect(t[2].min).toBe(19 * 60);
+    expect(t[3].pending.map((p) => p.id)).toEqual(['mag']);
+  });
+  it('follows the user meal times', () => {
+    const times = [9 * 60, 13 * 60, 18 * 60 + 30];
+    const t = mealTimeline(groupMeals([meal(10, 300)], goal, times), [], { min: 18 * 60 + 30 }, times);
+    expect(t.map((x) => [x.key, x.min])).toEqual([['t0', 9 * 60], ['t2', 18 * 60 + 30]]);
   });
 });

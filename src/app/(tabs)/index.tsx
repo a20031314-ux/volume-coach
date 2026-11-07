@@ -118,8 +118,9 @@ export default function Today() {
     routine ? rp.label : null,
     items.length ? `${items.length}개 · ${totalSets}세트 · 약 ${minutesFor(totalSets)}분` : null,
     doneToday ? `오늘 ${doneToday}세트 완료` : null,
-    adjusted && !notice ? '컨디션 반영' : null,
   ].filter(Boolean).join(' · ');
+
+  const recovering = result.stats.filter((s) => !settings.off.includes(s.k) && s.recNow < settings.ready).sort((a, b) => a.recNow - b.recNow);
 
   const start = running
     ? { label: '이어서 하기', onPress: () => router.push({ pathname: '/session', params: { id: running.id } }) }
@@ -141,7 +142,7 @@ export default function Today() {
           else { updateSettings({ ...a.patch, dismissed: [...settings.dismissed, hints[0].key] }); toast('반영했어요'); }
         } }
       : null;
-  const showHint = hint && !settings.dismissed.includes(hint.key);
+  const showHint = !notice && hint && !settings.dismissed.includes(hint.key);
 
   return (
     <Screen title="오늘" sub={fmt(result.T)}
@@ -156,7 +157,7 @@ export default function Today() {
 
       <ActivityRow />
 
-      <Disclosure title="부위별 회복도">
+      <Disclosure title={recovering.length ? `회복 중 · ${recovering.map((s) => s.n).join(' · ')}` : '모든 부위 회복됨'}>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {result.stats.map((s) => (
             <View key={s.k} style={{ flexBasis: '31%', flexGrow: 1, backgroundColor: c.surface, borderColor: c.line, borderWidth: 1, borderRadius: 8, padding: 8, gap: 3 }}>
