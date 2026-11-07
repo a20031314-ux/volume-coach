@@ -28,10 +28,14 @@ export function startRows(s: Settings): StartRow[] {
   ];
 }
 
-/** shown for new people until they finish or tap 나중에 (people from the old setup never see it) */
-export const startVisible = (s: Settings) => !!s.start && !s.start.skipped && startRows(s).some((r) => !r.done);
-/** today runs on defaults: goal or schedule still missing */
-export const onDefaults = (s: Settings) => !!s.start && (!s.profile.goal || s.profile.days == null);
+/** No defaults: without a goal and a schedule there's nothing to recommend from. */
+export const needsChoice = (s: Settings) => !s.profile.goal || s.profile.days == null;
+/**
+ * Shown while goal or schedule is missing (for anyone), and for new people until the other two are
+ * chosen or they tap 나중에 (only offered once goal and schedule are in).
+ */
+export const startVisible = (s: Settings) => needsChoice(s) || (!!s.start && !s.start.skipped && startRows(s).some((r) => !r.done));
+export const missingChoices = (s: Settings) => [!s.profile.goal ? '목적' : null, s.profile.days == null ? '운동 일정' : null].filter((x): x is string => !!x);
 
 /** 목적 saved: profile + the recommended weekly volume for it */
 export function applyGoal(s: Settings, patch: Pick<Profile, 'goal'> & Partial<Profile>): Partial<Settings> {

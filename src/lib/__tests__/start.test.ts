@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { nutritionTargets } from '../nutrition';
-import { applyGoal, applyMode, onDefaults, restart, startRows, startVisible } from '../start';
+import { applyGoal, applyMode, missingChoices, needsChoice, restart, startRows, startVisible } from '../start';
 import { DEFAULT_SETTINGS, type Settings } from '../types';
 
 const fresh: Settings = { ...DEFAULT_SETTINGS, start: {} };
@@ -12,19 +12,22 @@ describe('시작하기', () => {
       ['goal', false, null], ['schedule', false, null], ['ability', false, null], ['mode', false, null],
     ]);
     expect(startVisible(fresh)).toBe(true);
-    expect(onDefaults(fresh)).toBe(true);
+    expect(needsChoice(fresh)).toBe(true);
+    expect(missingChoices(fresh)).toEqual(['목적', '운동 일정']);
   });
-  it('is hidden for people from the old first-run screen and after 나중에', () => {
-    expect(startVisible({ ...DEFAULT_SETTINGS, start: undefined })).toBe(false);
-    expect(onDefaults({ ...DEFAULT_SETTINGS, start: undefined })).toBe(false);
-    expect(startVisible({ ...fresh, start: { skipped: true } })).toBe(false);
+  it('stays while goal or schedule is missing, for everyone; 나중에 hides only the optional two', () => {
+    expect(startVisible({ ...DEFAULT_SETTINGS, start: undefined })).toBe(true);
+    expect(startVisible({ ...fresh, start: { skipped: true } })).toBe(true);
+    const chosen = { ...fresh, profile: { ...fresh.profile, goal: 'hyp' as const, days: 4 } };
+    expect(startVisible(chosen)).toBe(true);
+    expect(startVisible({ ...chosen, start: { skipped: true } })).toBe(false);
+    expect(startVisible({ ...chosen, start: undefined })).toBe(false);
   });
-  it('uses maintenance calories until a goal is chosen', () => {
+  it('has no calorie target until a goal is chosen (no defaults)', () => {
     const p = { ...fresh.profile, age: 25, sex: 'm' as const, height: 175, weight: 75 };
-    const none = nutritionTargets(p, [], [], '2026-11-07')!;
-    const hyp = nutritionTargets({ ...p, goal: 'hyp' }, [], [], '2026-11-07')!;
-    expect(none.adjustLabel).toBe('목적 미입력 · 유지 칼로리');
-    expect(hyp.kcal - none.kcal).toBe(250);
+    expect(nutritionTargets(p, [], [], '2026-11-07')).toBeNull();
+    expect(nutritionTargets({ ...p, goal: 'hyp' }, [], [], '2026-11-07')?.kcal).toBeGreaterThan(0);
+    expect(needsChoice({ ...fresh, profile: { ...p, goal: 'hyp', days: 4 } })).toBe(false);
   });
   it('a chosen goal brings its recommended volume', () => {
     const s = { ...fresh, ...applyGoal(fresh, { goal: 'fit' }) } as Settings;

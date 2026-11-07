@@ -9,7 +9,7 @@ import { Button, Card, NumField, Pills, Row, Segmented, T } from '@/components/u
 import { Space, usePalette } from '@/constants/theme';
 import { knownExercises } from '@/lib/ability';
 import { recommendedVolume } from '@/lib/profile';
-import { GOAL_NAME, applyGoal, applyMode, applySchedule, startRows, type StartKey } from '@/lib/start';
+import { GOAL_NAME, applyGoal, applyMode, applySchedule, needsChoice, startRows, type StartKey } from '@/lib/start';
 import type { Goal, Profile } from '@/lib/types';
 import { live, newId, useData } from '@/store/store';
 
@@ -111,7 +111,7 @@ export function StartCard() {
         <T v="title" style={{ fontSize: 17 }}>시작하기</T>
         <T v="small">{done}/{rows.length}</T>
       </Row>
-      <T v="small" style={{ paddingBottom: Space.sm }}>고른 것만 반영해요. 안 고른 항목은 일반 기본값으로 추천해요.</T>
+      <T v="small" style={{ paddingBottom: Space.sm }}>{needsChoice(s) ? '목적과 운동 일정을 고르면 추천을 시작해요. 미리 정해 둔 기본값은 없어요.' : '나머지 둘은 고르면 추천이 더 잘 맞아요.'}</T>
       {rows.map((r) => (
         <Pressable key={r.key} accessibilityRole="button" accessibilityLabel={`${r.title} ${r.done ? r.summary : '미입력'}`}
           onPress={() => (r.key === 'ability' ? router.push('/ability') : setOpen(r.key))}
@@ -122,9 +122,11 @@ export function StartCard() {
           <Text style={{ color: c.muted, fontSize: 18 }}>›</Text>
         </Pressable>
       ))}
-      <Row style={{ justifyContent: 'flex-end', paddingTop: Space.sm }}>
-        <Button label="나중에 하기" kind="ghost" onPress={() => { update({ start: { ...(s.start ?? {}), skipped: true } }); router.navigate('/'); }} />
-      </Row>
+      {needsChoice(s) ? null : (
+        <Row style={{ justifyContent: 'flex-end', paddingTop: Space.sm }}>
+          <Button label="나중에 하기" kind="ghost" onPress={() => { update({ start: { ...(s.start ?? {}), skipped: true } }); router.navigate('/'); }} />
+        </Row>
+      )}
       <Sheet open={!!open} title={open ? TITLE[open] : ''} onClose={close}>
         {open === 'goal' ? <GoalSheet onDone={saved} /> : null}
         {open === 'schedule' ? <ScheduleSheet onDone={saved} /> : null}

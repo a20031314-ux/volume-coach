@@ -8,12 +8,12 @@ import { LogSheet, type LogDraft } from '@/components/log-sheet';
 import { HintRow, PlanView, minutesFor, type PlanItem } from '@/components/plan-view';
 import { tiredText, useRoutinePlan } from '@/components/routine-today';
 import { useToast } from '@/components/toast';
-import { Button, Meter, Pills, Row, Screen, Segmented, T, toneColor } from '@/components/ui';
+import { Button, Card, Meter, Pills, Row, Screen, Segmented, T, toneColor } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { useCoach } from '@/hooks/use-coach';
 import { useNow } from '@/hooks/use-now';
 import { abilityHints, knownExercises } from '@/lib/ability';
-import { onDefaults, startVisible } from '@/lib/start';
+import { missingChoices, needsChoice, startVisible } from '@/lib/start';
 import { buildPlan, deloadHint, suggestExercises } from '@/lib/coach';
 import { dow, fmt } from '@/lib/dates';
 import { MUSCLES, library } from '@/lib/exercises';
@@ -136,8 +136,6 @@ export default function Today() {
 
   const hint = deload
     ? { key: `deload:${result.W}`, text: deload, action: '디로드 켜기', run: () => updateSettings({ deload: true }) }
-    : onDefaults(settings)
-      ? { key: 'start-defaults', text: '아직 목적·일정을 안 골라서 일반 기본값으로 추천 중이에요.', action: 'MY에서 맞추기', run: () => router.navigate('/settings') }
     : startVisible(settings) && hints[0]?.key === 'ability-intro' ? null
     : hints[0]
       ? { key: hints[0].key, text: hints[0].text, action: hints[0].action.label, run: () => {
@@ -146,13 +144,27 @@ export default function Today() {
           else { updateSettings({ ...a.patch, dismissed: [...settings.dismissed, hints[0].key] }); toast('반영했어요'); }
         } }
       : null;
-  const showHint = !notice && hint && !settings.dismissed.includes(hint.key);
+  // no defaults: nothing to recommend until a goal and a schedule are chosen (a routine works without them)
+  const waiting = needsChoice(settings) && !routine && !running;
+  const showHint = !waiting && !notice && hint && !settings.dismissed.includes(hint.key);
 
   return (
     <Screen title="오늘" sub={fmt(result.T)}
       right={<Button label={adjusted ? '조정 •' : '조정'} kind="ghost" onPress={() => setSheet(true)} accessibilityLabel="오늘 조정" />}>
-      <PlanView title={title} meta={meta} notice={notice} start={start} items={items} ready={settings.ready}
-        empty={routine ? undefined : '이번 주 목표를 채웠거나 남은 부위가 회복 중이에요.'} />
+      {waiting ? (
+        <Card style={{ gap: Space.md }}>
+          <T v="title" style={{ fontSize: 20 }}>추천할 기준이 아직 없어요</T>
+          <T v="muted">{missingChoices(settings).join('·')}을 고르면 거기에 맞춰 오늘 할 운동을 골라 드려요.</T>
+          <Button label="MY에서 고르기" kind="primary" onPress={() => router.navigate('/settings')} style={{ paddingVertical: 14 }} />
+          <Button label="추천 없이 빈 운동 시작" kind="ghost" onPress={() => {
+            const sid = startSession([], settings.session.detail);
+            router.push({ pathname: '/session', params: { id: sid } });
+          }} />
+        </Card>
+      ) : (
+        <PlanView title={title} meta={meta} notice={notice} start={start} items={items} ready={settings.ready}
+          empty={routine ? undefined : '이번 주 목표를 채웠거나 남은 부위가 회복 중이에요.'} />
+      )}
 
       {showHint && hint ? (
         <HintRow text={hint.text} action={hint.action} onAction={hint.run}

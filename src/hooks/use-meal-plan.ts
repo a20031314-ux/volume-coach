@@ -31,8 +31,6 @@ function missingToday(): string[] {
   return s.date === today() ? s.foods : [];
 }
 
-/** used when there's no body profile yet */
-const FALLBACK = { kcal: 2200, p: 120, c: 260, f: 65 };
 
 export interface PlannedMeal { date: string; min: number; name: string; rec: MealRec; target: Macros }
 
@@ -50,7 +48,9 @@ export function planMeals(input: { settings: Settings; meals: Meal[]; logs: Work
   for (let i = 0; i < (input.days ?? 1); i++) {
     const date = addDays(d0, i);
     const t = dayTarget({ settings, comps: input.comps, logs: input.logs, meals: input.meals }, date, d0);
-    const day = t ? { kcal: t.kcal, p: t.p, c: t.c, f: t.f } : FALLBACK;
+    // no target (goal or body missing): nothing to size a meal against
+    if (!t) continue;
+    const day = { kcal: t.kcal, p: t.p, c: t.c, f: t.f };
     const logged = i === 0
       ? input.meals.filter((m) => m.date === date).reduce((a, m) => ({ k: a.k + m.kcal, p: a.p + m.p, c: a.c + m.c, f: a.f + m.f }), { k: 0, p: 0, c: 0, f: 0 })
       : { k: 0, p: 0, c: 0, f: 0 };

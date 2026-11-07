@@ -131,8 +131,13 @@ export default function FoodScreen() {
         </Card>
       ) : (
         <Card>
-          <T>나이·키·체중을 입력하면 목표를 계산해요.</T>
-          <Button label={settings.profile.age ? '신체 정보 입력하기' : '내 정보 입력하기'} kind="primary" onPress={() => router.push(settings.profile.age ? '/prefs/body' : '/prefs/profile')} style={{ alignSelf: 'flex-start' }} />
+          {!settings.profile.goal ? (<>
+            <T>목적을 고르면 칼로리·단백질 목표를 계산해요.</T>
+            <Button label="MY에서 목적 고르기" kind="primary" onPress={() => router.navigate('/settings')} style={{ alignSelf: 'flex-start' }} />
+          </>) : (<>
+            <T>나이·키·체중을 입력하면 목표를 계산해요.</T>
+            <Button label={settings.profile.age ? '신체 정보 입력하기' : '내 정보 입력하기'} kind="primary" onPress={() => router.push(settings.profile.age ? '/prefs/body' : '/prefs/profile')} style={{ alignSelf: 'flex-start' }} />
+          </>)}
           <T v="small">지금 먹은 양: {Math.round(sum.k)}kcal · 단백질 {Math.round(sum.p)}g · 탄수화물 {Math.round(sum.c)}g · 지방 {Math.round(sum.f)}g</T>
         </Card>
       )}
