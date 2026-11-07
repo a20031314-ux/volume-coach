@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { adjustFor, bank, bankDay, cutCap, DEFAULT_CHEAT, nextCheatDay, offsetPlan, overDays, type DayIntake } from '../cheat';
+import { adjustFor, autoDays, bank, bankDay, cutCap, DEFAULT_CHEAT, nextCheatDay, offsetChoices, offsetCutOn, offsetPlan, overDays, type DayIntake } from '../cheat';
 
 // 2026-11-07 is a Saturday
 const SAT = '2026-11-07';
@@ -42,13 +42,33 @@ describe('cheat day', () => {
 describe('offset', () => {
   it('splits an overeat into a capped food cut and movement', () => {
     const p = offsetPlan(1200, { days: 3, mix: 'mix', target: 2500, bmr: 1700, weightKg: 75 });
-    expect(p.cut).toBe(240);
+    expect(p.cuts).toEqual([240, 240, 240]);
     expect(p.foodKcal + p.moveKcal).toBe(1200);
-    expect(p.walkMin).toBeGreaterThan(0);
     expect(p.runMin).toBeLessThan(p.walkMin);
     const diet = offsetPlan(3000, { days: 3, mix: 'diet', target: 2500, bmr: 1700, weightKg: 75 });
     expect(diet.cut).toBe(cutCap(2500, 1700));
-    expect(diet.moveKcal).toBe(3000 - diet.cut * 3);
+    expect(diet.moveKcal).toBe(3000 - diet.foodKcal);
+  });
+  it('picks the shortest length that fits the cap, and offers 7 days too', () => {
+    expect(autoDays(600, 'diet', 2500, 1700)).toBe(2);
+    expect(autoDays(1200, 'diet', 2500, 1700)).toBe(4);
+    expect(autoDays(5000, 'diet', 2500, 1700)).toBe(7);
+    const ch = offsetChoices(900, { mix: 'diet', target: 2500, bmr: 1700, weightKg: 75 });
+    expect(ch.map((x) => x.label)).toEqual(['빠르게 3일', '여유 있게 7일']);
+    expect(ch[1].plan.cut).toBeLessThan(ch[0].plan.cut);
+    expect(ch[1].plan.foodKcal).toBe(910 - 10); // 7 × 130 rounded to 10s
+  });
+  it('never cuts more than the cap on a day when plans overlap', () => {
+    const first = offsetPlan(900, { days: 3, mix: 'diet', target: 2500, bmr: 1700, weightKg: 75 });
+    const existing = [{ src: 'a', from: SAT, days: 3, cut: first.cut, cuts: first.cuts, over: 900, moveKcal: 0, walkMin: 0, runMin: 0 }];
+    const second = offsetPlan(600, { days: 2, mix: 'diet', target: 2500, bmr: 1700, weightKg: 75, from: SAT, existing });
+    const all = [...existing, { ...existing[0], src: 'b', cuts: second.cuts, days: second.days }];
+    for (let i = 0; i < 8; i++) {
+      const d = new Date(2026, 10, 7 + i); const iso = `2026-11-${String(d.getDate()).padStart(2, '0')}`;
+      expect(offsetCutOn(all, iso)).toBeLessThanOrEqual(cutCap(2500, 1700));
+    }
+    expect(second.cuts.length).toBeGreaterThan(2); // pushed past the busy days
+    expect(second.foodKcal).toBe(600);
   });
   it('applies the cut while the plan runs', () => {
     const c = { ...DEFAULT_CHEAT, on: true, mode: 'date' as const, offsets: [{ src: '2026-11-06', from: SAT, days: 3, cut: 200, over: 900, moveKcal: 300, walkMin: 60, runMin: 25 }] };

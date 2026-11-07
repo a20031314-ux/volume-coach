@@ -306,7 +306,11 @@ export interface Settings {
 }
 
 /** A payback plan for one day that went over: `cut` kcal/day off the target for `days` days from `from`. */
-export interface Offset { src: string; from: string; days: number; cut: number; over: number; moveKcal: number; walkMin: number; runMin: number }
+export interface Offset {
+  src: string; from: string; days: number; cut: number; over: number; moveKcal: number; walkMin: number; runMin: number;
+  /** kcal off each day from `from` (newer plans) */
+  cuts?: number[];
+}
 
 export interface CheatSettings {
   on: boolean;

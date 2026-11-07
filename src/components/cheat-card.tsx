@@ -5,7 +5,7 @@ import { View } from 'react-native';
 
 import { Button, Card, Chip, Meter, Row, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
-import { dayCap, offsetPlan, overDays, type Offset } from '@/lib/cheat';
+import { cutOn, dayCap, offsetChoices, offsetEnd, overDays, type Offset, type OffsetPlan } from '@/lib/cheat';
 import { addDays, diffDays, fmt, today } from '@/lib/dates';
 import { cheatBank, cheatOf, dayIntake, dayTarget, type DayInputs, type DayTarget } from '@/lib/day-target';
 import { body } from '@/lib/profile';
@@ -29,17 +29,17 @@ export function CheatCard({ t }: { t: DayTarget | null }) {
     const b = cheatBank(x, d0);
     const over = overDays(cheat, d0, (d) => dayIntake(x, d), (d) => dayTarget(x, d, d0)?.kcal ?? 0);
     const weightKg = body(settings.profile, live(bodyT))?.weight || 70;
-    const plans = over.map((o) => ({ ...o, plan: offsetPlan(o.over, { days: cheat.offsetDays, mix: cheat.offsetMix, target: t?.base ?? 2200, bmr: t?.bmr ?? 1500, weightKg }) }));
-    const running = cheat.offsets.filter((o) => d0 >= o.from && diffDays(d0, o.from) < o.days);
+    const plans = over.map((o) => ({ ...o, choices: offsetChoices(o.over, { mix: cheat.offsetMix, target: t?.base ?? 2200, bmr: t?.bmr ?? 1500, weightKg, from: d0, existing: cheat.offsets }) }));
+    const running = cheat.offsets.filter((o) => d0 >= o.from && d0 <= offsetEnd(o));
     return { b, plans, running };
   }, [cheat, settings, bodyT, logsT, mealsT, d0, t]);
 
   if (!v || !t) return null;
   const { b, plans, running } = v;
 
-  const apply = (src: string, p: (typeof plans)[number]['plan']) => {
-    const keep = cheat.offsets.filter((o) => diffDays(d0, o.from) < o.days + 7);
-    const o: Offset = { src, from: d0, days: p.days, cut: p.cut, over: p.over, moveKcal: p.moveKcal, walkMin: p.walkMin, runMin: p.runMin };
+  const apply = (src: string, p: OffsetPlan) => {
+    const keep = cheat.offsets.filter((o) => offsetEnd(o) >= addDays(d0, -7));
+    const o: Offset = { src, from: d0, days: p.days, cut: p.cut, cuts: p.cuts, over: p.over, moveKcal: p.moveKcal, walkMin: p.walkMin, runMin: p.runMin };
     update({ cheat: { ...cheat, offsets: [...keep, o] } });
   };
   const dismiss = (src: string) => update({ cheat: { ...cheat, dismissed: [...cheat.dismissed.filter((d) => d >= addDays(d0, -7)), src] } });
@@ -64,28 +64,37 @@ export function CheatCard({ t }: { t: DayTarget | null }) {
         </Card>
       ) : null}
 
-      {running.map((o) => (
-        <Card key={o.src} style={{ gap: 4 }}>
-          <Row style={{ justifyContent: 'space-between' }}>
-            <T v="title" style={{ fontSize: 15 }}>상쇄 중 · {diffDays(d0, o.from) + 1}/{o.days}일</T>
-            <T v="small">{fmt(o.src)} +{n(o.over)}kcal</T>
-          </Row>
-          <T v="small">오늘 목표 {o.cut ? `−${o.cut}kcal (반영됨)` : '그대로'}{o.moveKcal ? ` · 기간 중 걷기 ${o.walkMin}분 또는 러닝 ${o.runMin}분 더 (약 ${n(o.moveKcal)}kcal)` : ''}</T>
-        </Card>
-      ))}
+      {running.map((o) => {
+        const total = o.cuts?.length ?? o.days;
+        const cutToday = cutOn(o, d0);
+        return (
+          <Card key={o.src} style={{ gap: 4 }}>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <T v="title" style={{ fontSize: 15 }}>상쇄 중 · {diffDays(d0, o.from) + 1}/{total}일</T>
+              <T v="small">{fmt(o.src)} +{n(o.over)}kcal · {fmt(offsetEnd(o))}까지</T>
+            </Row>
+            <T v="small">오늘 목표 {cutToday ? `−${cutToday}kcal (반영됨)` : '그대로'}{o.moveKcal ? ` · 기간 중 걷기 ${o.walkMin}분 또는 러닝 ${o.runMin}분 더 (약 ${n(o.moveKcal)}kcal)` : ''}</T>
+          </Card>
+        );
+      })}
 
-      {plans.map(({ date, over, plan }) => (
+      {plans.map(({ date, over, choices }) => (
         <Card key={date} style={{ gap: Space.sm, borderColor: c.warn }}>
           <T v="title" style={{ fontSize: 15 }}>{fmt(date)} 목표보다 +{n(over)}kcal</T>
-          <T>다음 {plan.days}일 동안 나눠서 상쇄할까요?</T>
-          <View style={{ gap: 2 }}>
-            {plan.cut ? <T v="small">• 식단: 하루 −{plan.cut}kcal (탄수·지방에서, 단백질은 그대로)</T> : null}
-            {plan.moveKcal ? <T v="small">• 운동: 기간 중 걷기 {plan.walkMin}분 또는 러닝 {plan.runMin}분 더 (약 {n(plan.moveKcal)}kcal)</T> : null}
-          </View>
-          <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
-            <Button label="괜찮아요" onPress={() => dismiss(date)} style={{ flex: 1 }} />
-            <Button label="이렇게 상쇄" kind="primary" onPress={() => apply(date, plan)} style={{ flex: 2 }} />
-          </Row>
+          <T v="small">하루 체중이 1~2kg 늘어도 대부분 수분이라 며칠이면 빠져요. 나눠서 갚을까요?</T>
+          {choices.map(({ label, plan }) => (
+            <View key={label} style={{ gap: 4, borderTopWidth: 1, borderColor: c.line, paddingTop: Space.sm }}>
+              <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+                <View style={{ flexShrink: 1, gap: 2 }}>
+                  <T style={{ fontWeight: '700' }}>{label}</T>
+                  {plan.cut ? <T v="small">식단 하루 −{plan.cut}kcal{plan.cuts.length > plan.days ? ` (다른 상쇄와 겹쳐 ${plan.cuts.length}일)` : ''}</T> : null}
+                  {plan.moveKcal ? <T v="small">운동 걷기 {plan.walkMin}분 또는 러닝 {plan.runMin}분 (약 {n(plan.moveKcal)}kcal)</T> : null}
+                </View>
+                <Button label="이걸로" kind="primary" onPress={() => apply(date, plan)} />
+              </Row>
+            </View>
+          ))}
+          <Button label="괜찮아요" kind="ghost" onPress={() => dismiss(date)} style={{ alignSelf: 'flex-start' }} />
         </Card>
       ))}
     </>

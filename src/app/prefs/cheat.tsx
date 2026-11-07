@@ -54,15 +54,11 @@ export default function CheatPrefs() {
         <T v="label">넘쳤을 때 상쇄</T>
         <Card>
           <View style={{ gap: 5 }}>
-            <T v="small">나누는 기간</T>
-            <Segmented options={[2, 3, 4, 5].map((d) => ({ v: d, n: `${d}일` }))} value={c.offsetDays} onChange={(v) => v && set({ offsetDays: v })} />
-          </View>
-          <View style={{ gap: 5 }}>
             <T v="small">방법</T>
             <Segmented options={[{ v: 'diet' as const, n: '식단만' }, { v: 'mix' as const, n: '식단+운동' }, { v: 'move' as const, n: '운동만' }]} value={c.offsetMix}
               onChange={(v) => v && set({ offsetMix: v })} />
           </View>
-          <T v="small">하루 목표보다 크게 넘친 날이 있으면 다음 날 영양 탭에서 상쇄 계획을 제안해요. 식단은 하루 최대 300kcal까지만 줄이고 기초대사량 아래로는 내리지 않아요. 남는 부분은 걷기·러닝 시간으로 안내해요.</T>
+          <T v="small">하루 목표보다 크게 넘친 날이 있으면 다음 날 영양 탭에서 상쇄 계획을 제안해요. 기간은 넘친 양에 맞춰 2~7일 중 가장 짧은 걸 추천하고, 7일로 여유 있게 고를 수도 있어요. 식단은 여러 상쇄를 합쳐도 하루 최대 300kcal까지만 줄이고 기초대사량 아래로는 내리지 않아요. 남는 부분은 걷기·러닝 시간으로 안내해요.</T>
         </Card>
       </>) : null}
     </Page>

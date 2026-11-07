@@ -58,10 +58,21 @@ export function bank(c: CheatSettings, today: string, intake: (date: string) => 
   return { cheatDay, daysLeft: diffDays(cheatDay, today), days, banked, budget: c.budget, pct: c.budget ? (banked / c.budget) * 100 : 0, lowDays: days.filter((x) => x.low).length };
 }
 
+/** kcal taken off on `date` by one plan (per-day schedule; older plans saved a flat `cut`) */
+export function cutOn(o: Offset, date: string): number {
+  const i = diffDays(date, o.from);
+  if (i < 0) return 0;
+  if (o.cuts) return o.cuts[i] ?? 0;
+  return i < o.days ? o.cut : 0;
+}
+
 /** kcal/day taken off by payback plans running on `date` */
 export function offsetCutOn(offsets: Offset[], date: string): number {
-  return offsets.reduce((a, o) => a + (date >= o.from && diffDays(date, o.from) < o.days ? o.cut : 0), 0);
+  return offsets.reduce((a, o) => a + cutOn(o, date), 0);
 }
+
+/** last day a plan still cuts */
+export const offsetEnd = (o: Offset) => addDays(o.from, (o.cuts?.length ?? o.days) - 1);
 
 export interface Adjust { kcal: number; label: string | null }
 
@@ -83,24 +94,64 @@ export function adjustFor(c: CheatSettings, date: string, base: number, bmr: num
   return { kcal: Math.round(k), label: parts.length ? parts.join(' · ') : null };
 }
 
-export interface OffsetPlan { over: number; days: number; cut: number; foodKcal: number; moveKcal: number; walkMin: number; runMin: number }
+export interface OffsetPlan {
+  over: number;
+  /** days the food cut runs (may stretch past the chosen length when other plans already use the room) */
+  days: number;
+  /** kcal off each day from the first day */
+  cuts: number[];
+  /** the largest daily cut */
+  cut: number;
+  foodKcal: number; moveKcal: number; walkMin: number; runMin: number;
+}
 
 const MIX_FOOD = { diet: 1, mix: 0.6, move: 0 } as const;
 const WALK_MET = 3.5, RUN_MET = 8.3;
+export const MIN_DAYS = 2, MAX_DAYS = 7;
 
-/** Spread `over` kcal across the next days: food cut (capped) + the rest as walking or running. */
-export function offsetPlan(over: number, o: { days: number; mix: CheatSettings['offsetMix']; target: number; bmr: number; weightKg: number }): OffsetPlan {
+/** Shortest plan (2–7 days) that pays the food part back within the daily cap. */
+export function autoDays(over: number, mix: CheatSettings['offsetMix'], target: number, bmr: number): number {
+  const cap = cutCap(target, bmr);
+  if (!cap) return MIN_DAYS;
+  return Math.min(MAX_DAYS, Math.max(MIN_DAYS, Math.ceil((over * MIX_FOOD[mix]) / cap)));
+}
+
+/**
+ * Spread `over` kcal: the food part evenly over `days` (rounded to 10kcal), never more than the daily
+ * cap together with plans already running — what doesn't fit moves to later days (up to 14), and
+ * whatever still doesn't fit becomes walking / running.
+ */
+export function offsetPlan(over: number, o: { days: number; mix: CheatSettings['offsetMix']; target: number; bmr: number; weightKg: number; from?: string; existing?: Offset[] }): OffsetPlan {
   const days = Math.max(1, o.days);
-  const cut = Math.min(cutCap(o.target, o.bmr), Math.round((over * MIX_FOOD[o.mix]) / days / 10) * 10);
-  const foodKcal = cut * days;
+  const cap = cutCap(o.target, o.bmr);
+  const food = over * MIX_FOOD[o.mix];
+  const per = Math.min(cap, Math.round(food / days / 10) * 10);
+  const cuts: number[] = [];
+  let left = Math.min(food, per * days);
+  for (let i = 0; left > 0 && i < 14; i++) {
+    const used = o.from && o.existing ? offsetCutOn(o.existing, addDays(o.from, i)) : 0;
+    const c = Math.max(0, Math.min(per, cap - used, Math.round(left / 10) * 10));
+    cuts.push(c);
+    left -= c;
+  }
+  while (cuts.length && cuts[cuts.length - 1] === 0) cuts.pop();
+  const foodKcal = cuts.reduce((a, b) => a + b, 0);
   const moveKcal = Math.max(0, Math.round(over - foodKcal));
   // MET × kg × hours = kcal; count only the part above resting (MET − 1)
   const perMin = (met: number) => ((met - 1) * o.weightKg) / 60;
   return {
-    over: Math.round(over), days, cut, foodKcal, moveKcal,
+    over: Math.round(over), days: Math.max(days, cuts.length), cuts, cut: Math.max(0, ...cuts), foodKcal, moveKcal,
     walkMin: Math.round(moveKcal / perMin(WALK_MET) / 5) * 5,
     runMin: Math.round(moveKcal / perMin(RUN_MET) / 5) * 5,
   };
+}
+
+/** The two choices shown: the shortest that fits, and 7 days (when that's different). */
+export function offsetChoices(over: number, o: Omit<Parameters<typeof offsetPlan>[1], 'days'>): { label: string; plan: OffsetPlan }[] {
+  const fast = autoDays(over, o.mix, o.target, o.bmr);
+  const out = [{ label: fast === MAX_DAYS ? '7일' : `빠르게 ${fast}일`, plan: offsetPlan(over, { ...o, days: fast }) }];
+  if (fast < MAX_DAYS && o.mix !== 'move') out.push({ label: '여유 있게 7일', plan: offsetPlan(over, { ...o, days: MAX_DAYS }) });
+  return out;
 }
 
 /** a day counts as overeating past this */
