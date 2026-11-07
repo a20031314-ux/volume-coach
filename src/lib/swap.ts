@@ -68,7 +68,7 @@ export function mainOptions(target: Macros, opts: { group?: FoodGroup; exclude?:
     && (sameGroupOnly ? d.g === opts.group : d.g !== 'veg' && d.g !== 'fruit' && dominant(d) === primary));
 }
 
-function build(target: Macros, main: FoodDef, primary: Macro, exclude: string[]): Swap | null {
+function build(target: Macros, main: FoodDef, primary: Macro, exclude: string[], prefer: string[] = []): Swap | null {
   const per = main[primary] / main.base;
   if (per <= 0) return null;
   const amt = roundTo(target[primary] / per, main.step);
@@ -88,7 +88,8 @@ function build(target: Macros, main: FoodDef, primary: Macro, exclude: string[])
       const a = roundTo((target[m] - total[m]) / (d[m] / d.base), d.step);
       if (!sensible(d, a)) continue;
       const next = add(total, macrosOf(d, a));
-      const s = score(target, next);
+      // a filler this person already eats wins a near-tie
+      const s = score(target, next) - (prefer.includes(n) ? 0.03 : 0);
       if (!best || s < best.s) best = { part: { food: d, amt: a }, total: next, s };
     }
     if (best && best.s < score(target, total)) {
@@ -103,21 +104,28 @@ function build(target: Macros, main: FoodDef, primary: Macro, exclude: string[])
 /** everyday foods first when two swaps are about as close */
 const COMMON = new Set(['닭가슴살', '계란', '두부', '소고기 우둔', '돼지 안심', '고등어', '참치캔(기름 뺀)', '연어', '그릭요거트 무가당', '우유',
   '흰쌀밥', '현미밥', '고구마', '감자', '오트밀', '바나나', '사과', '아몬드', '올리브유', '브로콜리']);
-const rankScore = (s: Swap) => s.score + (COMMON.has(s.parts[0].food.n) ? 0 : 0.15);
+/** foods this person eats most (식습관 리포트) come before the general everyday list */
+const rankScore = (s: Swap, prefer: string[]) => {
+  const i = prefer.indexOf(s.parts[0].food.n);
+  if (i >= 0) return s.score - 0.12 + Math.min(i, 10) * 0.005;
+  return s.score + (COMMON.has(s.parts[0].food.n) ? 0 : 0.15);
+};
 
 /**
  * Up to `limit` swaps for the target macros, closest first, each with a different main food.
  * `main` forces the main food; `loose` keeps the best ones even when none is close (used for
- * "fill what's left today", where there's no exact target).
+ * "fill what's left today", where there's no exact target). `prefer` (most eaten first) moves
+ * the person's own foods up.
  */
-export function swaps(target: Macros, opts: { group?: FoodGroup; exclude?: string[]; main?: string; limit?: number; primary?: Macro; loose?: boolean } = {}): Swap[] {
+export function swaps(target: Macros, opts: { group?: FoodGroup; exclude?: string[]; main?: string; limit?: number; primary?: Macro; loose?: boolean; prefer?: string[] } = {}): Swap[] {
   const primary = opts.primary ?? (opts.group === 'veg' || opts.group === 'fruit' ? 'c' : opts.group === 'protein' ? 'p' : dominant(target));
   const exclude = opts.exclude ?? [];
+  const prefer = opts.prefer ?? [];
   const mains = opts.main ? [byName(opts.main)].filter(Boolean) : mainOptions(target, { ...opts, primary });
   const out = mains
-    .map((m) => build(target, m, primary, exclude))
+    .map((m) => build(target, m, primary, exclude, prefer))
     .filter((s): s is Swap => s != null && (opts.loose || close(target, s.total)))
-    .sort((a, b) => rankScore(a) - rankScore(b));
+    .sort((a, b) => rankScore(a, prefer) - rankScore(b, prefer));
   return out.slice(0, opts.limit ?? 3);
 }
 

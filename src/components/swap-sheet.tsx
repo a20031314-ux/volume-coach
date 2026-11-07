@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import { Sheet } from '@/components/layout';
 import { Button, Card, Pills, Row, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
+import { usePreferredFoods } from '@/hooks/use-diet-report';
 import { foodLabel, type FoodDef, type Macros } from '@/lib/foods';
 import { mainOptions, swapNote, swaps, type Swap, type SwapPart } from '@/lib/swap';
 
@@ -55,6 +56,7 @@ export function SwapSheet({ target, action, onClose, onApply }: {
   onClose: () => void;
   onApply: (parts: SwapPart[]) => void;
 }) {
+  const prefer = usePreferredFoods();
   const [main, setMain] = useState<string | null>(null);
   const [prev, setPrev] = useState<SwapTarget | null>(null);
   if (target !== prev) { setPrev(target); setMain(null); }
@@ -64,9 +66,9 @@ export function SwapSheet({ target, action, onClose, onApply }: {
     const base = { group: target.def?.g, exclude: target.def ? [target.def.n] : [], primary: target.def?.g === 'meal' ? 'p' as const : undefined };
     return {
       mains: mainOptions(target.macros, base).slice(0, 16),
-      list: swaps(target.macros, { ...base, main: main ?? undefined, loose: main != null }),
+      list: swaps(target.macros, { ...base, main: main ?? undefined, loose: main != null, prefer }),
     };
-  }, [target, main]);
+  }, [target, main, prefer]);
 
   return (
     <Sheet open={target != null} title={target ? `${target.label} 대신` : ''} onClose={onClose}>

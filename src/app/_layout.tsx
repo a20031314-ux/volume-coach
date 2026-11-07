@@ -54,6 +54,7 @@ export default function RootLayout() {
               <Stack.Screen name="activity/run" options={{ headerShown: true, title: '유산소' }} />
               <Stack.Screen name="activity/lifts" options={{ headerShown: true, title: '웨이트 기록' }} />
               <Stack.Screen name="activity/move" options={{ headerShown: true, title: '걷기' }} />
+              <Stack.Screen name="diet-report" options={{ headerShown: true, title: '내 식습관' }} />
               <Stack.Screen name="run-map" options={{ headerShown: true, title: '경로' }} />
               <Stack.Screen name="prefs/health" options={{ headerShown: true, title: '걸음 수' }} />
               <Stack.Screen name="prefs/privacy" options={{ headerShown: true, title: '개인정보처리방침' }} />

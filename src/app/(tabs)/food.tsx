@@ -7,6 +7,7 @@ import { SwapOption, SwapSheet, type SwapTarget } from '@/components/swap-sheet'
 import { useToast } from '@/components/toast';
 import { Button, Card, ConfirmButton, DayNav, Field, Meter, NumField, Pills, Row, Screen, Stepper, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
+import { usePreferredFoods } from '@/hooks/use-diet-report';
 import { addDays, fmt, today } from '@/lib/dates';
 import { FOOD_DB, GROUP_NAME, amountLabel, findFood, foodLabel, macrosOf, type FoodDef, type FoodGroup } from '@/lib/foods';
 import { nutritionTargets } from '@/lib/nutrition';
@@ -28,6 +29,7 @@ export default function FoodScreen() {
   const addMeal = useData((s) => s.addMeal);
   const removeMeal = useData((s) => s.removeMeal);
   const updateSettings = useData((s) => s.updateSettings);
+  const prefer = usePreferredFoods();
 
   const [date, setDate] = useState(today());
   const [query, setQuery] = useState('');
@@ -102,8 +104,8 @@ export default function FoodScreen() {
     const p = t.p - sum.p, k = t.kcal - sum.k;
     if (p < 15 || k < 150) return [];
     // one meal's worth at most: ~40g protein, ~450kcal
-    return swaps({ p: Math.min(p, 40), k: Math.min(k, 450), c: Math.min(Math.max(0, t.c - sum.c), 50), f: Math.min(Math.max(0, t.f - sum.f), 12) }, { primary: 'p', loose: true, limit: 2 });
-  }, [t, date, sum.p, sum.k, sum.c, sum.f]);
+    return swaps({ p: Math.min(p, 40), k: Math.min(k, 450), c: Math.min(Math.max(0, t.c - sum.c), 50), f: Math.min(Math.max(0, t.f - sum.f), 12) }, { primary: 'p', loose: true, limit: 2, prefer });
+  }, [t, date, sum.p, sum.k, sum.c, sum.f, prefer]);
 
   const macro = (name: string, got: number, goal: number, color: string) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.md }}>
@@ -115,7 +117,7 @@ export default function FoodScreen() {
   const left = t ? t.kcal - Math.round(sum.k) : 0;
 
   return (
-    <Screen title="영양">
+    <Screen title="영양" right={<Button label="식습관" kind="ghost" onPress={() => router.push('/diet-report')} />}>
       <DayNav date={date} label={date === today() ? `오늘 · ${fmt(date)}` : fmt(date)}
         onPrev={() => setDate(addDays(date, -1))} onNext={() => setDate(addDays(date, 1))} />
 
