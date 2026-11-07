@@ -63,7 +63,7 @@ export function SwapSheet({ target, action, onClose, onApply }: {
 
   const opts = useMemo(() => {
     if (!target) return null;
-    const base = { group: target.def?.g, exclude: target.def ? [target.def.n] : [], primary: target.def?.g === 'meal' ? 'p' as const : undefined };
+    const base = { group: target.def?.g, exclude: target.def ? [target.def.n] : [], primary: target.def?.g === 'meal' || target.def?.g === 'brand' ? 'p' as const : undefined };
     return {
       mains: mainOptions(target.macros, base).slice(0, 16),
       list: swaps(target.macros, { ...base, main: main ?? undefined, loose: main != null, prefer }),

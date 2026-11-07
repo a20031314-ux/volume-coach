@@ -51,3 +51,14 @@ describe('swaps', () => {
     expect(s[0].parts.length).toBeGreaterThan(1);
   });
 });
+
+describe('franchise menus', () => {
+  it('keep the published kcal and protein, with carbs and fat that add up', () => {
+    const bigmac = food('맥도날드 빅맥');
+    expect(bigmac.k).toBe(505);
+    expect(bigmac.p).toBe(26);
+    expect(bigmac.estCF).toBe(true);
+    expect(Math.abs(bigmac.p * 4 + bigmac.c * 4 + bigmac.f * 9 - bigmac.k)).toBeLessThan(3);
+    expect(food('교촌치킨 허니콤보').unit).toBe('g');
+  });
+});

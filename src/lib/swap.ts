@@ -63,7 +63,7 @@ export function mainOptions(target: Macros, opts: { group?: FoodGroup; exclude?:
   const primary = opts.primary ?? (opts.group === 'protein' ? 'p' : dominant(target));
   // rice swaps for other carbs, nuts for other fats; meat can also become dairy or tofu;
   // dishes and custom foods break down by their main macro
-  const sameGroupOnly = opts.group != null && opts.group !== 'protein' && opts.group !== 'meal' && opts.group !== 'snack';
+  const sameGroupOnly = opts.group != null && !['protein', 'meal', 'snack', 'brand'].includes(opts.group);
   return FOOD_DB.filter((d) => MAIN_GROUPS.includes(d.g) && !opts.exclude?.includes(d.n)
     && (sameGroupOnly ? d.g === opts.group : d.g !== 'veg' && d.g !== 'fruit' && dominant(d) === primary));
 }

@@ -3,12 +3,13 @@
  * rounded — restaurant dishes vary ±20–30% in reality. Dishes and sides are one typical serving
  * (식약처 음식 DB style 1인분), not a specific restaurant's.
  */
+import { BRAND_FOODS } from './brands';
 import type { Food } from './types';
 
-export type FoodGroup = 'protein' | 'dairy' | 'carb' | 'fruit' | 'veg' | 'fat' | 'side' | 'meal' | 'snack' | 'drink';
+export type FoodGroup = 'protein' | 'dairy' | 'carb' | 'fruit' | 'veg' | 'fat' | 'side' | 'meal' | 'snack' | 'drink' | 'brand';
 
 export const GROUP_NAME: Record<FoodGroup, string> = {
-  protein: '단백질', carb: '탄수화물', fruit: '과일', veg: '채소', fat: '지방·견과', dairy: '유제품', side: '반찬·국', meal: '한식·외식', snack: '빵·간식', drink: '음료·술',
+  protein: '단백질', carb: '탄수화물', fruit: '과일', veg: '채소', fat: '지방·견과', dairy: '유제품', side: '반찬·국', meal: '한식·외식', snack: '빵·간식', drink: '음료·술', brand: '프랜차이즈',
 };
 
 export interface FoodDef {
@@ -25,6 +26,13 @@ export interface FoodDef {
   gPer?: number;
   /** oily fish: EPA·DHA */
   o3?: boolean;
+  /** franchise menu: brand name and source key (see brands.ts) */
+  brand?: string;
+  src?: string;
+  /** carbs/fat estimated (the brand publishes kcal and protein only) */
+  estCF?: boolean;
+  /** found online (shared cache / AI lookup) */
+  cloud?: { id: string; kind: 'official' | 'public' | 'other' | 'estimate'; url: string | null; checked: string; shared: boolean };
 }
 
 type Row = [string, FoodDef['unit'], number, number, number, number, number, number, FoodGroup, { gPer?: number; o3?: boolean }?];
@@ -420,7 +428,10 @@ const ROWS: Row[] = [
   ['쌈채소', '인분', 1, 1, 20, 2, 4, 0.3, 'veg', { gPer: 100 }],
 ];
 
-export const FOOD_DB: FoodDef[] = ROWS.map(([n, unit, base, step, k, p, c, f, g, x]) => ({ n, unit, base, step, k, p, c, f, g, ...x }));
+export const FOOD_DB: FoodDef[] = [
+  ...ROWS.map(([n, unit, base, step, k, p, c, f, g, x]): FoodDef => ({ n, unit, base, step, k, p, c, f, g, ...x })),
+  ...BRAND_FOODS,
+];
 
 const num = (x: number) => (Number.isInteger(x) ? String(x) : x.toFixed(1).replace(/\.0$/, ''));
 

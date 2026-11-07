@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { CourseSheet } from '@/components/course-sheet';
@@ -12,6 +12,8 @@ import { Space, usePalette } from '@/constants/theme';
 import { usePreferredFoods } from '@/hooks/use-diet-report';
 import { useNextMeal } from '@/hooks/use-meal-plan';
 import { addDays, fmt, today } from '@/lib/dates';
+import { BRAND_SOURCES } from '@/lib/brands';
+import { LOOKUP_MESSAGE, SOURCE_NAME, aiLookup, keepCloudFood, reportFood, searchShared, useCloudFoods } from '@/lib/food-lookup';
 import { FOOD_DB, GROUP_NAME, amountLabel, findFood, foodLabel, macrosOf, type FoodDef, type FoodGroup } from '@/lib/foods';
 import { groupMeals, warnText } from '@/lib/meal-groups';
 import { nutritionTargets } from '@/lib/nutrition';
@@ -51,11 +53,34 @@ export default function FoodScreen() {
 
   const q = query.trim();
   const mine = settings.foods;
+  const cloudFoods = useCloudFoods((x) => x.foods);
+  const [remote, setRemote] = useState<FoodDef[]>([]);
+  const [looking, setLooking] = useState(false);
+  const [brandSel, setBrandSel] = useState('맥도날드');
+  // shared cache: what other people already looked up (debounced, no AI cost)
+  useEffect(() => {
+    if (q.length < 2) return;
+    let alive = true;
+    const tm = setTimeout(() => { void searchShared(q).then((r) => { if (alive) setRemote(r); }); }, 400);
+    return () => { alive = false; clearTimeout(tm); };
+  }, [q]);
+  const online = [...cloudFoods, ...(q.length >= 2 ? remote : [])].filter((d, i, a) => a.findIndex((x) => x.n === d.n) === i && !FOOD_DB.some((x) => x.n === d.n));
   const shown: { k: string; n: string }[] = q
-    ? [...FOOD_DB.filter((d) => d.n.includes(q)).map((d) => ({ k: d.n, n: d.n })), ...mine.filter((f) => f.n.includes(q)).map((f) => ({ k: `my:${f.n}`, n: f.n }))]
+    ? [...FOOD_DB.filter((d) => d.n.includes(q)).map((d) => ({ k: d.n, n: d.n })),
+      ...online.filter((d) => d.n.includes(q) || remote.includes(d)).map((d) => ({ k: `cloud:${d.n}`, n: `☁ ${d.n}` })),
+      ...mine.filter((f) => f.n.includes(q)).map((f) => ({ k: `my:${f.n}`, n: f.n }))]
     : group === 'mine' ? mine.map((f) => ({ k: `my:${f.n}`, n: f.n }))
-      : FOOD_DB.filter((d) => d.g === group).map((d) => ({ k: d.n, n: d.n }));
-  const def: FoodDef | null = !custom && picked && !picked.startsWith('my:') ? FOOD_DB.find((d) => d.n === picked) ?? null : null;
+      : group === 'brand'
+        ? [...FOOD_DB, ...cloudFoods].filter((d) => d.g === 'brand' && (d.brand ?? '기타') === brandSel)
+          .map((d) => ({ k: d.cloud ? `cloud:${d.n}` : d.n, n: `${d.cloud ? '☁ ' : ''}${d.brand ? d.n.replace(`${d.brand} `, '') : d.n}` }))
+        : FOOD_DB.filter((d) => d.g === group).map((d) => ({ k: d.n, n: d.n }));
+  const brands = [...new Set([...FOOD_DB, ...cloudFoods].filter((d) => d.g === 'brand').map((d) => d.brand ?? '기타'))];
+  const findDef = (k: string | null): FoodDef | null => {
+    if (!k || k.startsWith('my:')) return null;
+    if (k.startsWith('cloud:')) return online.find((d) => `cloud:${d.n}` === k) ?? null;
+    return FOOD_DB.find((d) => d.n === k) ?? null;
+  };
+  const def: FoodDef | null = !custom ? findDef(picked) : null;
   const myFood: Food | null = !custom && picked?.startsWith('my:') ? mine.find((f) => `my:${f.n}` === picked) ?? null : null;
   const t = useMemo(() => nutritionTargets(settings.profile, live(bodyT), live(logsT), date), [settings.profile, bodyT, logsT, date]);
   const eaten = useMemo(() => live(mealsT).filter((m) => m.date === date).sort((a, b) => a.at - b.at), [mealsT, date]);
@@ -70,8 +95,19 @@ export default function FoodScreen() {
   const pick = (k: string) => {
     if (k === '__new') { setCustom(true); return; }
     setPicked(k); setQty(1);
-    const d = FOOD_DB.find((x) => x.n === k);
+    const d = findDef(k);
     if (d) setAmt(d.base);
+  };
+
+  const lookup = async () => {
+    setLooking(true);
+    const r = await aiLookup(q);
+    setLooking(false);
+    if (!r.ok) { toast(LOOKUP_MESSAGE[r.reason]); return; }
+    keepCloudFood(r.food);
+    setRemote((x) => [r.food, ...x.filter((d) => d.n !== r.food.n)]);
+    setPicked(`cloud:${r.food.n}`); setAmt(r.food.base); setQty(1);
+    toast(r.cached ? `${r.food.n} — 저장된 값` : `${r.food.n} 찾음`);
   };
 
   const addParts = (parts: SwapPart[], at: number) => {
@@ -83,6 +119,7 @@ export default function FoodScreen() {
 
   const save = () => {
     if (def) {
+      if (def.cloud) keepCloudFood(def);
       addParts([{ food: def, amt }], nowMs());
       toast(`${foodLabel(def, amt)} 추가됨`);
       return;
@@ -179,7 +216,13 @@ export default function FoodScreen() {
               <Pills options={[...(Object.keys(GROUP_NAME) as FoodGroup[]).map((g) => ({ k: g as FoodGroup | 'mine' | 'course', n: GROUP_NAME[g] })), ...(mine.length ? [{ k: 'mine' as const, n: '내 음식' }] : []), { k: 'course' as const, n: '+ 식사 코스' }]}
                 value={group} onToggle={(g) => (g === 'course' ? setCourseOpen(true) : setGroup(g))} />
             ) : null}
+            {!q && group === 'brand' ? (
+              <Pills options={brands.map((b) => ({ k: b, n: b }))} value={brandSel} onToggle={setBrandSel} />
+            ) : null}
             <Pills options={[...shown, { k: '__new', n: '+ 직접 입력' }]} value={picked} onToggle={pick} />
+            {q.length >= 2 && !FOOD_DB.some((d) => d.n === q) ? (
+              <Button label={looking ? 'AI가 찾는 중…' : `AI로 영양정보 찾기: "${q}"`} disabled={looking} onPress={lookup} style={{ alignSelf: 'flex-start' }} />
+            ) : null}
           </>
         ) : (
           <>
@@ -205,6 +248,17 @@ export default function FoodScreen() {
         )}
         {preview && preview.k ? (
           <T v="muted">{Math.round(preview.k)}kcal · 단백질 {Math.round(preview.p)}g · 탄수화물 {Math.round(preview.c)}g · 지방 {Math.round(preview.f)}g</T>
+        ) : null}
+        {def?.cloud ? (
+          <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+            <T v="small" style={{ flexShrink: 1, color: def.cloud.kind === 'official' || def.cloud.kind === 'public' ? c.muted : c.warn }}>
+              {SOURCE_NAME[def.cloud.kind]} ({def.cloud.checked} 확인){def.estCF ? ' · 탄수화물·지방은 추정' : ''}{def.cloud.shared ? ' · 다른 사용자와 공유됨' : ''}
+            </T>
+            <ConfirmButton label="값이 이상해요" confirmLabel="신고" onConfirm={() => { void reportFood(def.cloud!.id).then((ok) => toast(ok ? '신고했어요' : '신고하려면 로그인하세요')); }} />
+          </Row>
+        ) : null}
+        {def?.src && BRAND_SOURCES[def.src] ? (
+          <T v="small">{BRAND_SOURCES[def.src].brand} 공개값 ({BRAND_SOURCES[def.src].checked} 확인){def.estCF ? ' · 탄수화물·지방은 추정' : ''}{BRAND_SOURCES[def.src].note ? ` · ${BRAND_SOURCES[def.src].note}` : ''}</T>
         ) : null}
         <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
           {def ? (
