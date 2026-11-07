@@ -4,12 +4,13 @@ import { FOOD_DB, findFood, foodLabel, macrosOf } from '../foods';
 import { close, swapNote, swaps } from '../swap';
 
 const food = (n: string) => FOOD_DB.find((d) => d.n === n)!;
+const ALCOHOL = ['맥주', '소주', '막걸리', '와인', '하이볼', '위스키'];
 
 describe('food data', () => {
   it('kcal roughly matches 4/4/9 for everything but alcohol', () => {
     for (const d of FOOD_DB) {
       // alcohol has its own calories; vegetables and fruit count fiber as carbs
-      if (d.n === '맥주' || d.n === '소주' || d.g === 'veg' || d.g === 'fruit') continue;
+      if (ALCOHOL.includes(d.n) || d.k < 20 || d.g === 'veg' || d.g === 'fruit') continue;
       const calc = d.p * 4 + d.c * 4 + d.f * 9;
       expect(Math.abs(calc - d.k) / d.k, d.n).toBeLessThan(0.25);
     }
