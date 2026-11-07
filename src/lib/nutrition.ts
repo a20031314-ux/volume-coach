@@ -25,7 +25,8 @@ export function nutritionTargets(p: Profile, comps: BodyComp[], logs: WorkoutLog
     bmrFormula = 'mifflin';
   }
   const tdee = bmr * (ACTIVITY[Number(p.act ?? 1)] ?? 1.55);
-  const g = p.goal || 'hyp';
+  // no goal chosen yet: eat at maintenance rather than guess a surplus or deficit
+  const g = p.goal || 'keep';
   const cutBy = Math.round(Math.min(500, tdee * 0.2));
   const adj = g === 'cut' ? -cutBy : g === 'hyp' ? 250 : g === 'str' ? 150 : 0;
   const trainingDay = logs.some((l) => !l.deleted && l.date === date);
@@ -34,7 +35,7 @@ export function nutritionTargets(p: Profile, comps: BodyComp[], logs: WorkoutLog
   const fatRef = b.ffm ?? (b.bmi >= 30 ? 22 * Math.pow(b.height / 100, 2) : b.weight);
   const fat = Math.round(Math.max(fatRef * 0.8, (kcal * 0.2) / 9));
   const carb = Math.max(0, Math.round((kcal - prot.mid * 4 - fat * 9) / 4));
-  const adjustLabel = { hyp: '근비대 · 유지보다 +250kcal', str: '근력 · 유지보다 +150kcal', cut: `감량 · 유지보다 −${cutBy}kcal`, fit: '건강 · 유지 칼로리' }[g];
+  const adjustLabel = { hyp: '근비대 · 유지보다 +250kcal', str: '근력 · 유지보다 +150kcal', cut: `감량 · 유지보다 −${cutBy}kcal`, fit: '건강 · 유지 칼로리', keep: '목적 미입력 · 유지 칼로리' }[g];
   return {
     kcal: Math.round(kcal), p: prot.mid, c: carb, f: fat, tdee: Math.round(tdee), bmr: Math.round(bmr), bmrFormula,
     trainingDay, proteinBasis: prot.basis, adjustLabel, body: b,

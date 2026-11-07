@@ -13,6 +13,7 @@ import { Space, usePalette } from '@/constants/theme';
 import { useCoach } from '@/hooks/use-coach';
 import { useNow } from '@/hooks/use-now';
 import { abilityHints, knownExercises } from '@/lib/ability';
+import { onDefaults, startVisible } from '@/lib/start';
 import { buildPlan, deloadHint, suggestExercises } from '@/lib/coach';
 import { dow, fmt } from '@/lib/dates';
 import { MUSCLES, library } from '@/lib/exercises';
@@ -135,6 +136,9 @@ export default function Today() {
 
   const hint = deload
     ? { key: `deload:${result.W}`, text: deload, action: '디로드 켜기', run: () => updateSettings({ deload: true }) }
+    : onDefaults(settings)
+      ? { key: 'start-defaults', text: '아직 목적·일정을 안 골라서 일반 기본값으로 추천 중이에요.', action: 'MY에서 맞추기', run: () => router.navigate('/settings') }
+    : startVisible(settings) && hints[0]?.key === 'ability-intro' ? null
     : hints[0]
       ? { key: hints[0].key, text: hints[0].text, action: hints[0].action.label, run: () => {
           const a = hints[0].action;

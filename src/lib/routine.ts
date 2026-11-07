@@ -136,8 +136,8 @@ export function recommendRoutine({ profile, settings, schedule = 'rotation', kno
 
   const goalName: Record<Goal, string> = { hyp: '근비대', str: '근력', cut: '감량', fit: '건강' };
   return {
-    name: `${goalName[profile.goal]} · ${split.label}`,
-    source: 'recommended', goal: profile.goal, schedule, days: out,
+    name: profile.goal ? `${goalName[profile.goal]} · ${split.label}` : `추천 · ${split.label}`,
+    source: 'recommended', goal: profile.goal || undefined, schedule, days: out,
   };
 }
 

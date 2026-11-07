@@ -70,6 +70,8 @@ function withDefaults(p: Partial<Settings> | undefined): Settings {
   return {
     ...DEFAULT_SETTINGS, ...(p ?? {}),
     profile: { ...DEFAULT_SETTINGS.profile, ...(p?.profile ?? {}) },
+    // new people get the 시작하기 card; people who went through the old first-run screen don't
+    start: p?.start ?? (p?.onboarded ? undefined : {}),
     session: sessionDefaults(p?.session),
     checkin: { ...DEFAULT_SETTINGS.checkin, ...(p?.checkin ?? {}) },
     ability: { ...DEFAULT_SETTINGS.ability, ...(p?.ability ?? {}) },

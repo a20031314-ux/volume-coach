@@ -185,7 +185,7 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
   const [seed, setSeed] = useState(ex.key);
   if (seed !== ex.key) { setSeed(ex.key); setKg(p.kg ?? 0); setReps(p.reps ?? 10); setRpe(null); setCountState(ex.doneSets ?? ex.planned); }
 
-  const rest = restSeconds(ex.name, goal);
+  const rest = restSeconds(ex.name, goal || undefined);
   const setMode = session.detail === 'set';
   const n = ex.sets.length;
 

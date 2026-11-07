@@ -22,10 +22,13 @@ import { bodySource, latestBodyComp } from '@/lib/profile';
 import { SHORT } from '@/lib/strength';
 import { slope, weeklyTrends } from '@/lib/trends';
 import type { Goal } from '@/lib/types';
+import { StartCard } from '@/components/start-card';
+import { useToast } from '@/components/toast';
+import { restart, startVisible } from '@/lib/start';
 import { useAuth } from '@/store/auth';
 import { live, useData } from '@/store/store';
 
-const GOAL: Record<Goal, string> = { hyp: '근비대', str: '근력', cut: '감량', fit: '건강' };
+const GOAL: Record<Goal | '', string> = { hyp: '근비대', str: '근력', cut: '감량', fit: '건강', '': '목적 미입력' };
 const PERIODS = [{ v: '4', n: '4주' }, { v: '12', n: '12주' }, { v: '26', n: '6개월' }];
 type CardKey = 'body' | 'lift' | 'vol' | 'food';
 /** which card leads, by goal */
@@ -41,6 +44,8 @@ export default function MyScreen() {
   const c = usePalette();
   const auth = useAuth();
   const s = useData((x) => x.settings);
+  const update = useData((x) => x.updateSettings);
+  const toast = useToast();
   const bodyT = useData((x) => x.bodyComps);
   const logsT = useData((x) => x.logs);
   const sessionsT = useData((x) => x.sessions);
@@ -154,8 +159,10 @@ export default function MyScreen() {
         </Pressable>
       ) : null}
 
+      {startVisible(s) ? <StartCard /> : null}
+
       {/* 목적 */}
-      <Pressable accessibilityRole="button" accessibilityLabel="목표 바꾸기" onPress={() => router.push('/prefs/profile')}>
+      {startVisible(s) ? null : <Pressable accessibilityRole="button" accessibilityLabel="목표 바꾸기" onPress={() => router.push('/prefs/profile')}>
         <Card style={{ gap: 4 }}>
           <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
             <T v="title" style={{ fontSize: 17 }}>{GOAL[p.goal]}{p.days ? ` · 주 ${p.days}일` : ''} · {mode}</T>
@@ -163,14 +170,14 @@ export default function MyScreen() {
           </Row>
           <T v="small">주 {s.min}~{s.max}세트{t ? ` · ${t.base.toLocaleString('ko-KR')}kcal · 단백질 ${t.p}g` : ''}</T>
         </Card>
-      </Pressable>
+      </Pressable>}
 
       {/* 추세 */}
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: Space.sm }}>
         <T v="label">추세</T>
         <Segmented options={PERIODS} value={String(weeks)} onChange={(v) => v && setWeeks(Number(v))} />
       </Row>
-      {ORDER[p.goal].map((k) => cards[k])}
+      {ORDER[p.goal || 'hyp'].map((k) => cards[k])}
 
       {/* 설정 */}
       <Group title="운동">
@@ -200,7 +207,7 @@ export default function MyScreen() {
 
       <Group title="앱">
         <ListRow label="기능 설명" onPress={() => router.push('/guide')} />
-        <ListRow label="처음 설정 다시 하기" onPress={() => router.push('/setup')} />
+        <ListRow label="목적·일정 다시 고르기" onPress={() => { update(restart(s)); toast('맨 위 시작하기에서 다시 골라 주세요'); }} />
         <ListRow label="앱 정보" value={Constants.expoConfig?.version} onPress={() => router.push('/prefs/app')} last />
       </Group>
 

@@ -244,7 +244,8 @@ export interface Profile {
   bodySource?: 'inbody' | 'manual';
   years?: '' | '0' | '1' | '3';
   act?: '0' | '1' | '2';
-  goal: Goal;
+  /** '' = not chosen yet (calculations fall back to maintenance / general defaults) */
+  goal: Goal | '';
   /** training days per week, 2-6 */
   days?: number | null;
   /** minutes per session */
@@ -292,8 +293,13 @@ export interface Settings {
   /** 자율형: rules + daily recommendation · 루틴형: follow a routine */
   planMode: 'auto' | 'routine';
   activeRoutineId: string | null;
-  /** first-run setup done (or skipped) */
+  /** first launch handled (the app opened MY once) */
   onboarded?: boolean;
+  /**
+   * 시작하기 card on MY: present for people who haven't finished choosing (absent for people who
+   * set up with the old first-run screen). `mode` = 운동 방식 chosen, `skipped` = "나중에 하기".
+   */
+  start?: { mode?: boolean; skipped?: boolean };
   /** active strength program for one main lift */
   program?: StrengthProgram | null;
   /** 1RMs the user typed in, by exercise (override estimates from logs) */
@@ -380,7 +386,7 @@ export interface MealPlanSettings {
 export const DEFAULT_SETTINGS: Settings = {
   min: 12, max: 18, minEx: 2, gap: 1, cap: 24, mcap: 10, weekStart: 1, sec: 0.5,
   ready: 70, deload: false, off: [], customExercises: [], foods: [],
-  profile: { goal: 'hyp', act: '1' },
+  profile: { goal: '', act: '1' },
   session: { detail: 'exercise', setInputs: true, setRpe: false, restTimer: true, autoEndMin: 0 },
   checkin: { sleep: true, energy: true, sore: true, systemic: true },
   ability: { checked: false, pullups: 'unknown', pushups: 'unknown', dips: 'unknown', bbSquat: 'unknown', bbHinge: 'unknown', bbPress: 'unknown', pain: [] },

@@ -1,5 +1,6 @@
-import { Redirect } from 'expo-router';
+import { router } from 'expo-router';
 import { NativeTabs } from 'expo-router/native-tabs';
+import { useEffect } from 'react';
 
 import { usePalette } from '@/constants/theme';
 import { useData } from '@/store/store';
@@ -7,7 +8,13 @@ import { useData } from '@/store/store';
 export default function TabLayout() {
   const c = usePalette();
   const onboarded = useData((s) => s.settings.onboarded);
-  if (!onboarded) return <Redirect href="/setup" />;
+  const update = useData((s) => s.updateSettings);
+  // first launch opens MY, where the 시작하기 card asks the first choices
+  useEffect(() => {
+    if (onboarded) return;
+    update({ onboarded: true });
+    setTimeout(() => router.navigate('/settings'), 0);
+  }, [onboarded, update]);
   return (
     <NativeTabs backgroundColor={c.surface} indicatorColor={c.accentSoft} labelStyle={{ selected: { color: c.accent } }} tintColor={c.accent}>
       <NativeTabs.Trigger name="index">
