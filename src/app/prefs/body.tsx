@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
-import { Disclosure, Page } from '@/components/layout';
+import { Disclosure } from '@/components/layout';
+import { SavePage } from '@/components/save-bar';
 import { useToast } from '@/components/toast';
 import { Button, Card, ConfirmButton, NumField, Row, Segmented, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
+import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { fmt, today } from '@/lib/dates';
 import { body, bodySource, proteinTarget } from '@/lib/profile';
 import type { Profile } from '@/lib/types';
@@ -17,8 +19,7 @@ const EMPTY: Draft = { weight: null, smm: null, fatPct: null, ffm: null, bmr: nu
 export default function BodyPrefs() {
   const c = usePalette();
   const toast = useToast();
-  const s = useData((x) => x.settings);
-  const update = useData((x) => x.updateSettings);
+  const { s, update, dirty, save, reset } = useSettingsDraft();
   const bodyT = useData((x) => x.bodyComps);
   const addBody = useData((x) => x.addBodyComp);
   const removeBody = useData((x) => x.removeBodyComp);
@@ -31,7 +32,7 @@ export default function BodyPrefs() {
   const pt = b ? proteinTarget(p, b) : null;
 
   return (
-    <Page>
+    <SavePage dirty={dirty} onSave={save} onReset={reset}>
       <Segmented options={[{ v: 'inbody', n: '인바디' }, { v: 'manual', n: '직접 입력' }]} value={src}
         onChange={(v) => v && setP({ bodySource: v })} />
 
@@ -96,6 +97,6 @@ export default function BodyPrefs() {
           ) : <T v="muted" style={{ textAlign: 'center' }}>아직 측정 기록이 없어요.</T>}
         </>
       ) : null}
-    </Page>
+    </SavePage>
   );
 }

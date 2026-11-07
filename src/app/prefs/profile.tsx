@@ -2,19 +2,19 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { GearPicker } from '@/components/gear-picker';
-import { Disclosure, Page } from '@/components/layout';
+import { Disclosure } from '@/components/layout';
+import { SavePage } from '@/components/save-bar';
 import { useToast } from '@/components/toast';
 import { Button, Card, NumField, Pills, Row, Segmented, T } from '@/components/ui';
 import { Space } from '@/constants/theme';
+import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { gearOf } from '@/lib/gear';
 import { recommendedVolume, recoveryMultiplier, type VolumeRec } from '@/lib/profile';
 import type { Goal, Profile } from '@/lib/types';
-import { useData } from '@/store/store';
 
 export default function ProfilePrefs() {
   const toast = useToast();
-  const s = useData((x) => x.settings);
-  const update = useData((x) => x.updateSettings);
+  const { s, update, dirty, save, reset } = useSettingsDraft();
   const [undo, setUndo] = useState<VolumeRec | null>(null);
   const p = s.profile;
   const setP = (patch: Partial<Profile>) => update({ profile: { ...p, ...patch } });
@@ -23,7 +23,7 @@ export default function ProfilePrefs() {
   const m = recoveryMultiplier(p);
 
   return (
-    <Page>
+    <SavePage dirty={dirty} onSave={save} onReset={reset}>
       <Card>
         <Row gap={Space.md}>
           <NumField label="나이" value={p.age} onCommit={(age) => setP({ age })} />
@@ -55,7 +55,7 @@ export default function ProfilePrefs() {
           {same ? <T v="small">지금 규칙과 같아요</T> : (
             <Button kind="primary" label={`규칙에 적용 (지금 ${s.min}~${s.max})`} onPress={() => {
               setUndo({ min: s.min, max: s.max, cap: s.cap, mcap: s.mcap, minEx: s.minEx });
-              update(rec); toast('규칙에 적용했어요');
+              update(rec); toast('규칙에 반영 · 저장을 눌러 주세요');
             }} />
           )}
           {undo ? <Button label="되돌리기" onPress={() => { update(undo); setUndo(null); }} /> : null}
@@ -71,6 +71,6 @@ export default function ProfilePrefs() {
           <GearPicker value={gearOf(p)} onChange={(gear) => setP({ gear })} />
         </Card>
       </Disclosure>
-    </Page>
+    </SavePage>
   );
 }

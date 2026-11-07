@@ -1,35 +1,37 @@
 /** 식단 추천: meal times and on/off. */
 import { Platform, View } from 'react-native';
 
-import { Page } from '@/components/layout';
+import { SavePage } from '@/components/save-bar';
 import { useToast } from '@/components/toast';
 import { Button, Card, Row, Segmented, Stepper, T } from '@/components/ui';
 import { Space } from '@/constants/theme';
 import { usePreferredFoods } from '@/hooks/use-diet-report';
+import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { hhmm, mealName, staples } from '@/lib/meal-plan';
 import { enableMealReminders } from '@/store/meal-reminders';
-import { useData } from '@/store/store';
 
 const STEP = 30;
 const MAX_MEALS = 6;
 
 export default function MealPlanPrefs() {
   const toast = useToast();
-  const plan = useData((s) => s.settings.mealPlan);
-  const update = useData((s) => s.updateSettings);
+  const { s: draft, update, dirty, save, reset } = useSettingsDraft();
+  const plan = draft.mealPlan;
   const prefer = usePreferredFoods();
   const { protein, carb } = staples(prefer);
 
   const set = (patch: Partial<typeof plan>) => update({ mealPlan: { ...plan, ...patch } });
   const setTime = (i: number, m: number) => set({ times: plan.times.map((t, j) => (j === i ? m : t)).sort((a, b) => a - b) });
 
-  const turn = async (on: boolean) => {
-    set({ on });
-    if (on && Platform.OS !== 'web' && !(await enableMealReminders())) toast('알림 권한이 없어 영양 탭에만 보여요');
+  const turn = (on: boolean) => set({ on });
+  // notification permission is asked when the change is saved
+  const onSave = async () => {
+    save();
+    if (plan.on && Platform.OS !== 'web' && !(await enableMealReminders())) toast('알림 권한이 없어 영양 탭에만 보여요');
   };
 
   return (
-    <Page>
+    <SavePage dirty={dirty} onSave={onSave} onReset={reset}>
       <Card>
         <Segmented options={[{ v: 'off', n: '끔' }, { v: 'on', n: '끼니마다 추천' }]} value={plan.on ? 'on' : 'off'}
           onChange={(v) => v && turn(v === 'on')} />
@@ -63,6 +65,6 @@ export default function MealPlanPrefs() {
             : '기록이 쌓이면 자주 먹는 음식으로 바뀌어요.'}</T>
         </Card>
       </>) : null}
-    </Page>
+    </SavePage>
   );
 }

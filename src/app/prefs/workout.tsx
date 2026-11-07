@@ -1,16 +1,16 @@
 import { View } from 'react-native';
 
-import { Page } from '@/components/layout';
+
+import { SavePage } from '@/components/save-bar';
 import { Card, Pills, Segmented, T } from '@/components/ui';
-import { useData } from '@/store/store';
+import { useSettingsDraft } from '@/hooks/use-settings-draft';
 
 export default function WorkoutPrefs() {
-  const s = useData((x) => x.settings);
-  const update = useData((x) => x.updateSettings);
+  const { s, update, dirty, save, reset } = useSettingsDraft();
   const set = (patch: Partial<typeof s.session>) => update({ session: { ...s.session, ...patch } });
 
   return (
-    <Page>
+    <SavePage dirty={dirty} onSave={save} onReset={reset}>
       <Card>
         <Segmented options={[{ v: 'exercise', n: '운동별' }, { v: 'set', n: '세트별' }]} value={s.session.detail}
           onChange={(v) => v && set({ detail: v })} />
@@ -34,6 +34,6 @@ export default function WorkoutPrefs() {
           value={String(s.session.autoEndMin)} onChange={(v) => v != null && set({ autoEndMin: Number(v), autoEndChosen: true })} />
         {s.session.autoEndMin ? <T v="small">마지막 체크 후 {s.session.autoEndMin}분 동안 입력이 없으면 그 시각으로 운동을 끝내요.</T> : null}
       </Card>
-    </Page>
+    </SavePage>
   );
 }

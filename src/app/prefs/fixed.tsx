@@ -2,11 +2,13 @@
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { Disclosure, Page } from '@/components/layout';
+import { Disclosure } from '@/components/layout';
+import { SavePage } from '@/components/save-bar';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, ConfirmButton, Field, NumField, Pills, Row, Segmented, Stepper, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { usePreferredFoods } from '@/hooks/use-diet-report';
+import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { DOW } from '@/lib/dates';
 import { fixedOf, freeDef, itemLabel, type FixedItem } from '@/lib/fixed';
 import { SUPP_SECTIONS, caffeineWarnings, suggestTimes, usualWorkout, type TimingContext } from '@/lib/fixed-timing';
@@ -25,8 +27,7 @@ const days = (d: number[]) => (!d.length ? '매일' : d.length === 5 && [1, 2, 3
 export default function FixedPrefs() {
   const c = usePalette();
   const toast = useToast();
-  const settings = useData((s) => s.settings);
-  const update = useData((s) => s.updateSettings);
+  const { s: settings, update, dirty, save: saveDraft, reset } = useSettingsDraft();
   const cloud = useCloudFoods((s) => s.foods);
   const sessionsT = useData((s) => s.sessions);
   const prefer = usePreferredFoods();
@@ -61,7 +62,7 @@ export default function FixedPrefs() {
   };
   const retime = () => {
     save(retimed(f.items.map((x) => ({ ...x, custom: false }))));
-    toast('추천 시간으로 맞췄어요');
+    toast('추천 시간으로 맞췄어요 · 저장을 눌러 주세요');
   };
 
   const checkRow = (n: string) => {
@@ -91,7 +92,7 @@ export default function FixedPrefs() {
     if (!edit) return;
     const exists = f.items.some((x) => x.id === edit.id);
     save(retimed(exists ? f.items.map((x) => (x.id === edit.id ? edit : x)) : [...f.items, edit]));
-    toast(exists ? '수정됨' : `${edit.n} 추가됨`);
+    toast(`${exists ? '수정' : `${edit.n} 추가`} · 저장을 눌러 주세요`);
     setEdit(null); setQ('');
   };
   const matches = q.trim() ? all.filter((d) => d.n.includes(q.trim())).slice(0, 12) : [];
@@ -99,7 +100,7 @@ export default function FixedPrefs() {
   const isSupp = editDef?.g === 'supp';
 
   return (
-    <Page>
+    <SavePage dirty={dirty} onSave={saveDraft} onReset={reset}>
       <Card>
         <Segmented options={[{ v: 'check' as const, n: '체크해서 기록' }, { v: 'auto' as const, n: '시간 되면 자동 기록' }]} value={f.mode}
           onChange={(v) => v && update({ fixed: { ...f, mode: v } })} />
@@ -118,7 +119,7 @@ export default function FixedPrefs() {
             {!found.length ? (
               <Button label={`"${term}" 직접 추가 (열량 0)`} onPress={() => {
                 save(retimed([...f.items, { id: newId(), n: term, amt: 1, time: 8 * 60, dows: [], free: true }]));
-                toast(`${term} 추가됨`); setFind('');
+                toast(`${term} 추가 · 저장을 눌러 주세요`); setFind('');
               }} style={{ alignSelf: 'flex-start' }} />
             ) : null}
           </View>
@@ -211,6 +212,6 @@ export default function FixedPrefs() {
           </Row>
         </Card>
       )}
-    </Page>
+    </SavePage>
   );
 }

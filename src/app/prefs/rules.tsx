@@ -1,15 +1,15 @@
 import { View } from 'react-native';
 
-import { Disclosure, Page } from '@/components/layout';
+import { Disclosure } from '@/components/layout';
+import { SavePage } from '@/components/save-bar';
 import { Card, NumField, Pills, Row, Segmented, T } from '@/components/ui';
 import { Space } from '@/constants/theme';
+import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { MUSCLES } from '@/lib/exercises';
 import type { Settings } from '@/lib/types';
-import { useData } from '@/store/store';
 
 export default function RulesPrefs() {
-  const s = useData((x) => x.settings);
-  const update = useData((x) => x.updateSettings);
+  const { s, update, dirty, save, reset } = useSettingsDraft();
 
   const num = (k: keyof Settings, label: string) => (
     <NumField label={label} value={s[k] as number}
@@ -23,7 +23,7 @@ export default function RulesPrefs() {
   );
 
   return (
-    <Page>
+    <SavePage dirty={dirty} onSave={save} onReset={reset}>
       <Card>
         <Row gap={Space.md}>{num('min', '주간 최소 세트')}{num('max', '주간 최대 세트')}</Row>
         <Row gap={Space.md}>{num('minEx', '최소 운동 종류')}{num('gap', '휴식일')}</Row>
@@ -61,6 +61,6 @@ export default function RulesPrefs() {
           </View>
         </Card>
       </Disclosure>
-    </Page>
+    </SavePage>
   );
 }

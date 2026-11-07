@@ -1,30 +1,27 @@
 import { router } from 'expo-router';
-import { ScrollView, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View } from 'react-native';
 
-import { useToast } from '@/components/toast';
-import { Button, Card, Pills, Row, Segmented, T } from '@/components/ui';
-import { Space, usePalette } from '@/constants/theme';
+import { SavePage } from '@/components/save-bar';
+import { Button, Card, Pills, Segmented, T } from '@/components/ui';
+import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { PAIN_NAME } from '@/lib/ability';
 import type { Ability, PainMove, Tri } from '@/lib/types';
-import { useData } from '@/store/store';
 
 const TRI = [{ v: 'yes', n: '할 수 있어요' }, { v: 'no', n: '아직 못 해요' }] as { v: Exclude<Tri, 'unknown'>; n: string }[];
 
 /** Quick check of what the user can do. Every question can be left blank. */
 export default function AbilityCheck() {
-  const c = usePalette();
-  const insets = useSafeAreaInsets();
-  const toast = useToast();
-  const s = useData((x) => x.settings);
-  const update = useData((x) => x.updateSettings);
+  const { s, update, dirty, save, reset } = useSettingsDraft();
   const a = s.ability;
   const set = (patch: Partial<Ability>) => update({ ability: { ...a, ...patch } });
   const tri = (v: Tri | null): Tri => v ?? 'unknown';
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: c.bg }} keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ padding: Space.lg, paddingBottom: insets.bottom + Space.xl, gap: Space.md, maxWidth: 680, width: '100%', alignSelf: 'center' }}>
+    <SavePage dirty={dirty || !s.ability.checked} label="완료" onReset={reset} onSave={() => {
+      update({ ability: { ...a, checked: true }, dismissed: [...new Set([...s.dismissed, 'ability-intro'])] });
+      // the patch above lands on the next render; store it with the rest
+      setTimeout(() => { save(); router.back(); }, 0);
+    }}>
       <T v="muted">모르면 비워두세요.</T>
 
       <T v="label">맨몸 동작</T>
@@ -62,14 +59,7 @@ export default function AbilityCheck() {
         <T v="small">통증이 계속되면 전문가와 상의하세요.</T>
       </Card>
 
-      <Row style={{ flexWrap: 'nowrap' }}>
-        <Button label="운동별로 표시하기" style={{ flex: 1 }} onPress={() => router.push('/exercises')} />
-        <Button label="완료" kind="primary" style={{ flex: 1, paddingVertical: 13 }} onPress={() => {
-          update({ ability: { ...a, checked: true }, dismissed: [...new Set([...s.dismissed, 'ability-intro'])] });
-          toast('할 수 있는 운동으로 추천을 맞췄어요');
-          router.back();
-        }} />
-      </Row>
-    </ScrollView>
+      <Button label="운동별로 표시하기" onPress={() => router.push('/exercises')} style={{ alignSelf: 'flex-start' }} />
+    </SavePage>
   );
 }

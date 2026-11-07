@@ -1,23 +1,23 @@
 /** 치팅데이: 언제, 얼마나 모을지, 넘쳤을 때 어떻게 상쇄할지. */
 import { View } from 'react-native';
 
-import { Page } from '@/components/layout';
+
+import { SavePage } from '@/components/save-bar';
 import { Button, Card, Pills, Row, Segmented, Stepper, T } from '@/components/ui';
+import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { DOW, addDays, fmt, today } from '@/lib/dates';
 import { cheatOf } from '@/lib/day-target';
 import type { CheatSettings } from '@/lib/types';
-import { useData } from '@/store/store';
 
 export default function CheatPrefs() {
-  const settings = useData((s) => s.settings);
-  const update = useData((s) => s.updateSettings);
+  const { s: settings, update, dirty, save, reset } = useSettingsDraft();
   const c = cheatOf(settings);
   const set = (patch: Partial<CheatSettings>) => update({ cheat: { ...c, ...patch } });
   const d0 = today();
   const date = c.date && c.date >= d0 ? c.date : addDays(d0, 6);
 
   return (
-    <Page>
+    <SavePage dirty={dirty} onSave={save} onReset={reset}>
       <Card>
         <Segmented options={[{ v: 'off', n: '끔' }, { v: 'on', n: '치팅데이 쓰기' }]} value={c.on ? 'on' : 'off'}
           onChange={(v) => v && set({ on: v === 'on', since: v === 'on' ? d0 : c.since })} />
@@ -61,6 +61,6 @@ export default function CheatPrefs() {
           <T v="small">하루 목표보다 크게 넘친 날이 있으면 다음 날 영양 탭에서 상쇄 계획을 제안해요. 기간은 넘친 양에 맞춰 2~7일 중 가장 짧은 걸 추천하고, 7일로 여유 있게 고를 수도 있어요. 식단은 여러 상쇄를 합쳐도 하루 최대 300kcal까지만 줄이고 기초대사량 아래로는 내리지 않아요. 남는 부분은 걷기·러닝 시간으로 안내해요.</T>
         </Card>
       </>) : null}
-    </Page>
+    </SavePage>
   );
 }

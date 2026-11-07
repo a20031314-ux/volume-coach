@@ -1,27 +1,29 @@
 import { GearPicker } from '@/components/gear-picker';
-import { gearOf } from '@/lib/gear';
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { View } from 'react-native';
-
-import { Disclosure, Group, ListRow, Page } from '@/components/layout';
+import { Disclosure, Group, ListRow } from '@/components/layout';
+import { SavePage } from '@/components/save-bar';
 import { useToast } from '@/components/toast';
 import { Button, Card, Chip, ConfirmButton, Pills, Row, Segmented, Stepper, T } from '@/components/ui';
 import { VolumeCheckView } from '@/components/volume-check';
 import { Space, usePalette } from '@/constants/theme';
+import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { knownExercises } from '@/lib/ability';
 import { MUSCLES } from '@/lib/exercises';
+import { gearOf } from '@/lib/gear';
 import { recommendRoutine, weeklyVolume } from '@/lib/routine';
 import type { Profile, Routine } from '@/lib/types';
 import { live, newId, useData } from '@/store/store';
+import { router } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { View } from 'react-native';
 
 const SOURCE = { recommended: '추천', edited: '추천 수정', custom: '직접' } as const;
 
 export default function RoutineHub() {
   const c = usePalette();
   const toast = useToast();
-  const s = useData((x) => x.settings);
-  const update = useData((x) => x.updateSettings);
+  const { s, update, dirty, save: saveDraft, reset } = useSettingsDraft();
+  // creating / switching / deleting a routine takes effect right away
+  const commitNow = useData((x) => x.updateSettings);
   const routinesT = useData((x) => x.routines);
   const putRoutine = useData((x) => x.putRoutine);
   const removeRoutine = useData((x) => x.removeRoutine);
@@ -42,12 +44,12 @@ export default function RoutineHub() {
   const save = (r: Omit<Routine, 'id' | 'updatedAt'>) => {
     const id = newId();
     putRoutine({ ...r, id });
-    update({ planMode: 'routine', activeRoutineId: id });
+    commitNow({ planMode: 'routine', activeRoutineId: id }); update({ planMode: 'routine', activeRoutineId: id });
     return id;
   };
 
   return (
-    <Page>
+    <SavePage dirty={dirty} onSave={saveDraft} onReset={reset}>
       <Segmented options={[{ v: 'auto', n: '자율형' }, { v: 'routine', n: '루틴형' }]} value={s.planMode}
         onChange={(v) => v && update({ planMode: v })} />
 
@@ -72,10 +74,10 @@ export default function RoutineHub() {
                       {active ? <Chip label="사용 중" tone="accent" /> : <Chip label={SOURCE[r.source]} tone="rest" />}
                     </Row>
                     <Row>
-                      {!active ? <Button label="이 루틴 쓰기" kind="primary" onPress={() => { update({ planMode: 'routine', activeRoutineId: r.id }); toast(`${r.name}으로 바꿨어요`); }} /> : null}
+                      {!active ? <Button label="이 루틴 쓰기" kind="primary" onPress={() => { commitNow({ planMode: 'routine', activeRoutineId: r.id }); update({ planMode: 'routine', activeRoutineId: r.id }); toast(`${r.name}으로 바꿨어요`); }} /> : null}
                       <Button label="편집" onPress={() => router.push({ pathname: '/routine-edit', params: { id: r.id } })} />
                       <View style={{ flex: 1 }} />
-                      <ConfirmButton label="삭제" onConfirm={() => { removeRoutine(r.id); if (active) update({ activeRoutineId: null }); }} />
+                      <ConfirmButton label="삭제" onConfirm={() => { removeRoutine(r.id); if (active) { commitNow({ activeRoutineId: null }); update({ activeRoutineId: null }); } }} />
                     </Row>
                   </Card>
                 );
@@ -135,6 +137,6 @@ export default function RoutineHub() {
           </View>
         </>
       )}
-    </Page>
+    </SavePage>
   );
 }
