@@ -6,6 +6,7 @@ import { Button, Chip, Pills, Row, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { knownExercises, verdict } from '@/lib/ability';
 import { MUSCLES, available, library } from '@/lib/exercises';
+import { gearOf } from '@/lib/gear';
 import type { ExercisePref, MuscleKey } from '@/lib/types';
 import { live, useData } from '@/store/store';
 
@@ -21,7 +22,7 @@ export default function ExerciseList() {
   const [m, setM] = useState<MuscleKey>('chest');
   const known = useMemo(() => knownExercises(live(logsT)), [logsT]);
   const ctx = { ...s, known };
-  const eq = s.profile.equipment ?? 'gym';
+  const eq = gearOf(s.profile);
   const list = library(s.customExercises).filter((e) => e.m === m);
 
   const mark = (name: string, pref: ExercisePref) => {

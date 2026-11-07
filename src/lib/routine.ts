@@ -1,6 +1,6 @@
 /** Routines: recommended splits, weekly volume checks, and which day is up today. Pure functions. */
 import { candidates, substitutes, type AbilityCtx } from './ability';
-import { HEAVY, MUSCLES, MUSCLE_NAME, library, type Equipment, type Exercise } from './exercises';
+import { HEAVY, MUSCLES, MUSCLE_NAME, library, type Exercise } from './exercises';
 import { recommendedVolume } from './profile';
 import type { Goal, MuscleKey, Profile, Routine, RoutineDay, Session, Settings } from './types';
 
@@ -64,10 +64,9 @@ export function recommendRoutine({ profile, settings, schedule = 'rotation', kno
   const { rec: recommended } = recommendedVolume(profile);
   // the user's own weekly range wins over the recommendation
   const rec = { ...recommended, min: settings.min ?? recommended.min, max: settings.max ?? recommended.max };
-  const eq: Equipment = profile.equipment ?? 'gym';
   const avoid = new Set(profile.avoid ?? []);
   // only exercises this user can and wants to do, favourites and familiar ones first
-  const lib = candidates({ ability: settings.ability, exercisePrefs: settings.exercisePrefs, customExercises: settings.customExercises, profile: { ...profile, equipment: eq }, known });
+  const lib = candidates({ ability: settings.ability, exercisePrefs: settings.exercisePrefs, customExercises: settings.customExercises, profile, known });
   // per-session set budget: about 3 minutes per working set including rest
   const budget = Math.min(rec.cap, Math.max(8, Math.floor((profile.sessionMin ?? 60) / 3)));
 

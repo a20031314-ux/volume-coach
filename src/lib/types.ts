@@ -1,3 +1,4 @@
+import type { Gear } from './gear';
 import type { ActivityKind, Elevation, RoutePoint } from './elevation';
 import type { StrengthProgram } from './progression';
 import type { Weather } from './weather';
@@ -250,7 +251,10 @@ export interface Profile {
   days?: number | null;
   /** minutes per session */
   sessionMin?: number | null;
+  /** old single choice; replaced by `gear` (kept so older data still reads) */
   equipment?: 'gym' | 'dumbbell' | 'bodyweight';
+  /** 장비 checklist; unset = not chosen */
+  gear?: Gear[] | null;
   /** muscles to keep out of plans (injury etc.) */
   avoid?: MuscleKey[];
 }

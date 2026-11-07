@@ -1,10 +1,12 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import { GearPicker } from '@/components/gear-picker';
 import { Disclosure, Page } from '@/components/layout';
 import { useToast } from '@/components/toast';
 import { Button, Card, NumField, Pills, Row, Segmented, T } from '@/components/ui';
 import { Space } from '@/constants/theme';
+import { gearOf } from '@/lib/gear';
 import { recommendedVolume, recoveryMultiplier, type VolumeRec } from '@/lib/profile';
 import type { Goal, Profile } from '@/lib/types';
 import { useData } from '@/store/store';
@@ -63,11 +65,10 @@ export default function ProfilePrefs() {
       <Disclosure title="루틴 추천 조건">
         <Card>
           <Row gap={Space.md}>
-            <NumField label="주 운동 일수" value={p.days ?? 4} onCommit={(v) => v != null && setP({ days: Math.max(2, Math.min(6, Math.round(v))) })} />
-            <NumField label="1회 운동 (분)" value={p.sessionMin ?? 60} onCommit={(v) => v != null && setP({ sessionMin: v })} />
+            <NumField label="주 운동 일수" value={p.days ?? null} onCommit={(v) => v != null && setP({ days: Math.max(2, Math.min(6, Math.round(v))) })} />
+            <NumField label="1회 운동 (분)" value={p.sessionMin ?? null} onCommit={(v) => v != null && setP({ sessionMin: v })} />
           </Row>
-          <Segmented options={[{ v: 'gym', n: '헬스장' }, { v: 'dumbbell', n: '덤벨만' }, { v: 'bodyweight', n: '맨몸' }]} value={p.equipment ?? 'gym'}
-            onChange={(v) => v && setP({ equipment: v })} />
+          <GearPicker value={gearOf(p)} onChange={(gear) => setP({ gear })} />
         </Card>
       </Disclosure>
     </Page>

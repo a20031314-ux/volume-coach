@@ -9,6 +9,8 @@ import { Button, Card, NumField, Pills, Row, Segmented, T } from '@/components/u
 import { Space, usePalette } from '@/constants/theme';
 import { knownExercises } from '@/lib/ability';
 import { recommendedVolume } from '@/lib/profile';
+import { GearPicker } from '@/components/gear-picker';
+import { gearOf, type Gear } from '@/lib/gear';
 import { GOAL_NAME, applyGoal, applyMode, applySchedule, needsChoice, startRows, type StartKey } from '@/lib/start';
 import type { Goal, Profile } from '@/lib/types';
 import { live, newId, useData } from '@/store/store';
@@ -46,7 +48,7 @@ function ScheduleSheet({ onDone }: { onDone: () => void }) {
   const p = s.profile;
   const [days, setDays] = useState<number | null>(p.days ?? null);
   const [min, setMin] = useState<number | null>(p.sessionMin ?? null);
-  const [eq, setEq] = useState<Profile['equipment'] | null>(p.equipment ?? null);
+  const [gear, setGear] = useState<Gear[] | null>(gearOf(p) ?? null);
   return (
     <>
       <View style={{ gap: 6 }}><T>주 몇 번 운동해요?</T>
@@ -55,11 +57,11 @@ function ScheduleSheet({ onDone }: { onDone: () => void }) {
       <View style={{ gap: 6 }}><T>한 번에 몇 분? <T v="small">(선택)</T></T>
         <Segmented options={[45, 60, 75, 90].map((n) => ({ v: String(n), n: `${n}분` }))} value={min ? String(min) : null} onChange={(v) => setMin(v ? Number(v) : null)} />
       </View>
-      <View style={{ gap: 6 }}><T>어디서 운동해요? <T v="small">(선택)</T></T>
-        <Segmented options={[{ v: 'gym', n: '헬스장' }, { v: 'dumbbell', n: '덤벨만' }, { v: 'bodyweight', n: '맨몸' }]} value={eq ?? null} onChange={(v) => setEq(v ?? null)} />
+      <View style={{ gap: 6 }}><T>쓸 수 있는 장비</T>
+        <GearPicker value={gear} onChange={setGear} />
       </View>
-      <Button label="저장" kind="primary" disabled={days == null} onPress={() => {
-        update(applySchedule(s, { days, sessionMin: min, ...(eq ? { equipment: eq } : {}) })); onDone();
+      <Button label="저장" kind="primary" disabled={days == null || gear == null} onPress={() => {
+        update(applySchedule(s, { days, sessionMin: min, gear })); onDone();
       }} />
     </>
   );

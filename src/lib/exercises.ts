@@ -1,3 +1,4 @@
+import { canDo, type Gear } from './gear';
 import type { CustomExercise, MuscleKey } from './types';
 
 /** halfLife: hours for accumulated fatigue on this muscle to halve (before age adjustment) */
@@ -268,11 +269,9 @@ export const LIBRARY: Exercise[] = [
   ...EXTRA.map(([n, m, s, need, p, lv, d]): Exercise => ({ n, m, s, need, p, lv, d, extra: true })),
 ];
 
-/** Can this exercise be done with the given equipment? Custom exercises are always allowed. */
-export function available(e: Exercise, eq: Equipment = 'gym'): boolean {
-  if (eq === 'gym') return true;
-  if (eq === 'dumbbell') return e.need !== 'g';
-  return e.need === 'b';
+/** Can this exercise be done with the user's gear (unset = no limit)? */
+export function available(e: Exercise, gear: Gear[] | undefined): boolean {
+  return canDo(e, gear);
 }
 
 export function library(custom: CustomExercise[] = []): Exercise[] {

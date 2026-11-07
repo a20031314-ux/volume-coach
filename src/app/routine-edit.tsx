@@ -49,7 +49,6 @@ export default function RoutineEditor() {
     setDirty(true);
   };
   const day = (r: Routine, key: string) => r.days.find((d) => d.key === key)!;
-  const eq = settings.profile.equipment ?? 'gym';
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -97,7 +96,7 @@ export default function RoutineEditor() {
                 <Row>
                   <Button label="교체" kind="ghost" onPress={() => change((r) => {
                     const x = day(r, d.key).exercises[ei];
-                    const alts = alternatives(x.name, x.muscle, { ...settings, profile: { ...settings.profile, equipment: eq }, known }).filter((n) => !day(r, d.key).exercises.some((y) => y.name === n));
+                    const alts = alternatives(x.name, x.muscle, { ...settings, known }).filter((n) => !day(r, d.key).exercises.some((y) => y.name === n));
                     if (alts.length) x.name = alts[0];
                   })} />
                   <Button label="↑" kind="ghost" accessibilityLabel="위로" disabled={ei === 0}

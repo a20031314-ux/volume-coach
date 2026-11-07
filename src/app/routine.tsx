@@ -1,3 +1,5 @@
+import { GearPicker } from '@/components/gear-picker';
+import { gearOf } from '@/lib/gear';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
@@ -113,8 +115,7 @@ export default function RoutineHub() {
                   <Stepper label="주 운동 일수" value={p.days ?? 4} min={2} max={6} onChange={(days) => setP({ days })} />
                   <Stepper label="1회 (분)" value={p.sessionMin ?? 60} step={15} min={30} max={120} onChange={(sessionMin) => setP({ sessionMin })} />
                 </Row>
-                <Segmented options={[{ v: 'gym', n: '헬스장' }, { v: 'dumbbell', n: '덤벨만' }, { v: 'bodyweight', n: '맨몸' }]} value={p.equipment ?? 'gym'}
-                  onChange={(v) => v && setP({ equipment: v })} />
+                <GearPicker value={gearOf(p)} onChange={(gear) => setP({ gear })} />
                 <View style={{ gap: 6 }}><T v="muted">뺄 부위</T>
                   <Pills danger options={MUSCLES} value={p.avoid ?? []}
                     onToggle={(k) => setP({ avoid: (p.avoid ?? []).includes(k) ? (p.avoid ?? []).filter((x) => x !== k) : [...(p.avoid ?? []), k] })} />

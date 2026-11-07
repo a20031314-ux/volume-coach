@@ -1,4 +1,5 @@
 /** Which exercises this user can and wants to do. Pure functions shared by every recommender. */
+import { gearOf } from './gear';
 import { MUSCLE_NAME, available, library, type Demand, type Exercise } from './exercises';
 import type { Ability, MuscleKey, PainMove, Session, Settings, WorkoutLog } from './types';
 
@@ -65,7 +66,7 @@ function rank(e: Exercise, ctx: AbilityCtx): number {
 
 /** Recommendable exercises, best first. */
 export function candidates(ctx: AbilityCtx, filter: (e: Exercise) => boolean = () => true): Exercise[] {
-  const eq = ctx.profile.equipment ?? 'gym';
+  const eq = gearOf(ctx.profile);
   const lib = library(ctx.customExercises).map((e, i) => ({ e, i }))
     .filter(({ e }) => filter(e) && available(e, eq) && verdict(e, ctx).ok && (!e.extra || rank(e, ctx) < 2));
   return lib.sort((a, b) => rank(a.e, ctx) - rank(b.e, ctx) || a.i - b.i).map(({ e }) => e);
@@ -75,7 +76,7 @@ export const candidatesFor = (muscle: MuscleKey, ctx: AbilityCtx) => candidates(
 
 /** Exercises for manual pickers: everything except "can't", favourites first. */
 export function pickable(muscle: MuscleKey, ctx: AbilityCtx, equipmentOnly = false): Exercise[] {
-  const eq = ctx.profile.equipment ?? 'gym';
+  const eq = gearOf(ctx.profile);
   return library(ctx.customExercises).map((e, i) => ({ e, i }))
     .filter(({ e }) => e.m === muscle && ctx.exercisePrefs[e.n] !== 'cant' && (!equipmentOnly || available(e, eq)))
     .sort((a, b) => rank(a.e, ctx) - rank(b.e, ctx) || a.i - b.i)
