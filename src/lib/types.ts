@@ -1,4 +1,5 @@
 import type { Gear } from './gear';
+import type { GuideSettings } from './guide';
 import type { ActivityKind, Elevation, RoutePoint } from './elevation';
 import type { StrengthProgram } from './progression';
 import type { Weather } from './weather';
@@ -316,6 +317,8 @@ export interface Settings {
   cheat?: CheatSettings;
   /** 고정식단: foods / supplements eaten on a schedule */
   fixed?: FixedSettings;
+  /** 가이드 모드: spoken countdown, rep rhythm and rest cues (unset = never set up) */
+  guide?: GuideSettings;
   updatedAt: number;
 }
 

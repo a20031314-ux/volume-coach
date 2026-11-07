@@ -4,6 +4,7 @@ import { AppState, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ExName } from '@/components/exercise-menu';
+import { GuidePanel } from '@/components/guide-panel';
 import { Sheet } from '@/components/layout';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, Chip, ConfirmButton, Pills, Row, Segmented, Stepper, T } from '@/components/ui';
@@ -11,6 +12,7 @@ import { Radius, Space, usePalette } from '@/constants/theme';
 import { knownExercises, pickable } from '@/lib/ability';
 import { MUSCLES, MUSCLE_NAME } from '@/lib/exercises';
 import { repRange } from '@/lib/profile';
+import { appliesTo } from '@/lib/guide';
 import { fmtDuration } from '@/lib/run';
 import { lastPerformance, prefill, restSeconds, setCount, shouldAutoEnd, summarize } from '@/lib/session';
 import type { MuscleKey, Session, SessionExercise } from '@/lib/types';
@@ -176,6 +178,7 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
   const opts = useData((s) => s.settings.session);
   const goal = useData((s) => s.settings.profile.goal);
   const profile = useData((s) => s.settings.profile);
+  const guideOn = useData((s) => (s.settings.guide ? appliesTo(s.settings.guide, ex.name) : false));
   const p = prefill(ex, lastPerf);
   const [kg, setKg] = useState<number>(p.kg ?? 0);
   const [reps, setReps] = useState<number>(p.reps ?? 10);
@@ -188,6 +191,8 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
   const rest = restSeconds(ex.name, goal || undefined);
   const setMode = session.detail === 'set';
   const n = ex.sets.length;
+  const next = session.exercises.find((e) => e.key !== ex.key && e.status === 'pending') ?? null;
+  const guide = <GuidePanel ex={ex} session={session} kg={kg} reps={reps} rest={rest} next={next} />;
 
   const doneSet = () => {
     completeSet(session.id, ex.key, opts.setInputs ? { kg: kg || null, reps: reps || null, rpe: opts.setRpe ? rpe : null } : { rpe: opts.setRpe ? rpe : null });
@@ -241,7 +246,8 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
                 onToggle={(k) => setRpe(rpe === Number(k) ? null : Number(k))} />
             </View>
           ) : null}
-          <Button label={`${n + 1}세트 완료`} kind="primary" onPress={doneSet} style={{ paddingVertical: 14 }} />
+          {n < ex.planned ? guide : null}
+          <Button label={`${n + 1}세트 완료`} kind={guideOn && n < ex.planned ? 'default' : 'primary'} onPress={doneSet} style={{ paddingVertical: 14 }} />
           <Row>
             {n ? <Button label="마지막 세트 취소" kind="ghost" onPress={() => undoSet(session.id, ex.key)} /> : null}
             <View style={{ flex: 1 }} />
@@ -251,6 +257,7 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
         </>
       ) : (
         <>
+ {guide}
           <Row gap={Space.md}><Stepper label="세트 수" value={count} onChange={setCountState} min={1} max={20} /></Row>
           <Row style={{ flexWrap: 'nowrap' }}>
             <Button label="건너뛰기" onPress={() => skipExercise(session.id, ex.key)} style={{ flex: 1 }} />

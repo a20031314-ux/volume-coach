@@ -187,6 +187,7 @@ export default function MyScreen() {
         <ListRow label="운동 목록" value={marks ? `표시 ${marks}개` : undefined} onPress={() => router.push('/exercises')} />
         <ListRow label="운동 규칙" value={`주 ${s.min}~${s.max}세트${s.deload ? ' · 디로드' : ''}`} onPress={() => router.push('/prefs/rules')} />
         <ListRow label="기록 방식" value={s.session.detail === 'set' ? '세트별' : '운동별'} onPress={() => router.push('/prefs/workout')} />
+        <ListRow label="가이드 모드" value={s.guide?.on ? `켜짐${s.guide.only.length ? ` · ${s.guide.only.length}종목` : ''}${s.guide.rest ? '' : ' · 휴식 안내 끔'}` : '꺼짐'} onPress={() => router.push('/prefs/guide')} />
         <ListRow label="걸음 수" value={health ? HEALTH_NAME : '꺼짐'} onPress={() => router.push('/prefs/health')} last />
       </Group>
 
