@@ -3,15 +3,20 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Disclosure } from '@/components/layout';
+import { SwapOption, SwapSheet, type SwapTarget } from '@/components/swap-sheet';
 import { useToast } from '@/components/toast';
 import { Button, Card, ConfirmButton, DayNav, Field, Meter, NumField, Pills, Row, Screen, Stepper, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { addDays, fmt, today } from '@/lib/dates';
-import { FOODS, nutritionTargets } from '@/lib/nutrition';
-import type { Food } from '@/lib/types';
+import { FOOD_DB, GROUP_NAME, amountLabel, findFood, foodLabel, macrosOf, type FoodDef, type FoodGroup } from '@/lib/foods';
+import { nutritionTargets } from '@/lib/nutrition';
+import { swaps, type SwapPart } from '@/lib/swap';
+import type { Food, Meal } from '@/lib/types';
 import { live, useData } from '@/store/store';
 
 const r1 = (x: number) => Math.round(x * 10) / 10;
+/** called from handlers only */
+const nowMs = () => Date.now();
 
 export default function FoodScreen() {
   const c = usePalette();
@@ -31,25 +36,74 @@ export default function FoodScreen() {
   const [cf, setCf] = useState<{ n: string; k: number | null; p: number | null; c: number | null; f: number | null }>({ n: '', k: null, p: null, c: null, f: null });
   const [keep, setKeep] = useState(false);
   const [qty, setQty] = useState(1);
+  const [group, setGroup] = useState<FoodGroup | 'mine'>('protein');
+  /** amount in the picked built-in food's own unit (g, 개, 공기…) */
+  const [amt, setAmt] = useState(100);
+  const [swapFor, setSwapFor] = useState<{ target: SwapTarget; replace?: Meal } | null>(null);
 
-  const foods = useMemo(() => FOODS.concat(settings.foods), [settings.foods]);
-  const shown = foods.filter((f) => !query.trim() || f.n.includes(query.trim()));
+  const q = query.trim();
+  const mine = settings.foods;
+  const shown: { k: string; n: string }[] = q
+    ? [...FOOD_DB.filter((d) => d.n.includes(q)).map((d) => ({ k: d.n, n: d.n })), ...mine.filter((f) => f.n.includes(q)).map((f) => ({ k: `my:${f.n}`, n: f.n }))]
+    : group === 'mine' ? mine.map((f) => ({ k: `my:${f.n}`, n: f.n }))
+      : FOOD_DB.filter((d) => d.g === group).map((d) => ({ k: d.n, n: d.n }));
+  const def: FoodDef | null = !custom && picked && !picked.startsWith('my:') ? FOOD_DB.find((d) => d.n === picked) ?? null : null;
+  const myFood: Food | null = !custom && picked?.startsWith('my:') ? mine.find((f) => `my:${f.n}` === picked) ?? null : null;
   const t = useMemo(() => nutritionTargets(settings.profile, live(bodyT), live(logsT), date), [settings.profile, bodyT, logsT, date]);
   const eaten = useMemo(() => live(mealsT).filter((m) => m.date === date).sort((a, b) => a.at - b.at), [mealsT, date]);
   const sum = eaten.reduce((a, m) => ({ k: a.k + m.kcal, p: a.p + m.p, c: a.c + m.c, f: a.f + m.f }), { k: 0, p: 0, c: 0, f: 0 });
 
   const current: Food | null = custom
     ? { n: cf.n.trim(), k: cf.k ?? 0, p: cf.p ?? 0, c: cf.c ?? 0, f: cf.f ?? 0 }
-    : foods.find((f) => f.n === picked) ?? null;
+    : myFood;
+  /** what's about to be added, already scaled */
+  const preview = def ? macrosOf(def, amt) : current ? { k: current.k * qty, p: current.p * qty, c: current.c * qty, f: current.f * qty } : null;
+
+  const pick = (k: string) => {
+    if (k === '__new') { setCustom(true); return; }
+    setPicked(k); setQty(1);
+    const d = FOOD_DB.find((x) => x.n === k);
+    if (d) setAmt(d.base);
+  };
+
+  const addParts = (parts: SwapPart[], at: number) => {
+    for (const p of parts) {
+      const m = macrosOf(p.food, p.amt);
+      addMeal({ date, name: foodLabel(p.food, p.amt), qty: 1, kcal: r1(m.k), p: r1(m.p), c: r1(m.c), f: r1(m.f), at });
+    }
+  };
 
   const save = () => {
+    if (def) {
+      addParts([{ food: def, amt }], nowMs());
+      toast(`${foodLabel(def, amt)} 추가됨`);
+      return;
+    }
     if (!current || !current.n) return toast(custom ? '음식 이름을 입력하세요' : '음식을 고르세요');
     if (!current.k) return toast('칼로리를 입력하세요');
-    if (custom && keep && !foods.some((f) => f.n === current.n)) updateSettings({ foods: [...settings.foods, current] });
-    addMeal({ date, name: current.n, qty, kcal: r1(current.k * qty), p: r1(current.p * qty), c: r1(current.c * qty), f: r1(current.f * qty), at: Date.now() });
+    if (custom && keep && !mine.some((f) => f.n === current.n)) updateSettings({ foods: [...mine, current] });
+    addMeal({ date, name: current.n, qty, kcal: r1(current.k * qty), p: r1(current.p * qty), c: r1(current.c * qty), f: r1(current.f * qty), at: nowMs() });
     toast(`${current.n} 추가됨`);
     setQty(1); setCustom(false); setKeep(false); setCf({ n: '', k: null, p: null, c: null, f: null });
   };
+
+  const applySwap = (parts: SwapPart[]) => {
+    if (!swapFor) return;
+    const old = swapFor.replace;
+    if (old) removeMeal(old.id);
+    addParts(parts, old?.at ?? nowMs());
+    toast(old ? `${old.name} → ${parts.map((p) => p.food.n).join(' + ')}` : '추가됨');
+    setSwapFor(null);
+  };
+
+  // evening: what would fill the protein still missing, within the calories left
+  const fill = useMemo(() => {
+    if (!t || date !== today() || new Date(nowMs()).getHours() < 17) return [];
+    const p = t.p - sum.p, k = t.kcal - sum.k;
+    if (p < 15 || k < 150) return [];
+    // one meal's worth at most: ~40g protein, ~450kcal
+    return swaps({ p: Math.min(p, 40), k: Math.min(k, 450), c: Math.min(Math.max(0, t.c - sum.c), 50), f: Math.min(Math.max(0, t.f - sum.f), 12) }, { primary: 'p', loose: true, limit: 2 });
+  }, [t, date, sum.p, sum.k, sum.c, sum.f]);
 
   const macro = (name: string, got: number, goal: number, color: string) => (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.md }}>
@@ -86,16 +140,22 @@ export default function FoodScreen() {
           <T v="small">지금 먹은 양: {Math.round(sum.k)}kcal · 단백질 {Math.round(sum.p)}g · 탄수화물 {Math.round(sum.c)}g · 지방 {Math.round(sum.f)}g</T>
         </Card>
       )}
-      {t && sum.p < t.p && date === today() && new Date().getHours() >= 17 ? (
-        <T v="muted">단백질이 {Math.round(t.p - sum.p)}g 남았어요. 닭가슴살 100g이면 약 23g이에요.</T>
-      ) : null}
+      {fill.length && t ? (<>
+        <T v="muted">단백질이 {Math.round(t.p - sum.p)}g 남았어요. 한 끼로 채우면:</T>
+        {fill.map((s) => (
+          <SwapOption key={s.parts.map((p) => p.food.n).join('|')} s={s} action="먹은 음식에 추가" onPick={() => { addParts(s.parts, nowMs()); toast('추가됨'); }} />
+        ))}
+      </>) : null}
 
       <Card>
         {!custom ? (
           <>
-            <Field label="음식 찾기" value={query} onChangeText={setQuery} placeholder="예: 닭가슴살" />
-            <Pills options={[...shown.map((f) => ({ k: f.n, n: f.n })), { k: '__new', n: '+ 직접 입력' }]} value={picked}
-              onToggle={(k) => (k === '__new' ? setCustom(true) : setPicked(k))} />
+            <Field label="음식 찾기" value={query} onChangeText={setQuery} placeholder="예: 연어" />
+            {!q ? (
+              <Pills options={[...(Object.keys(GROUP_NAME) as FoodGroup[]).map((g) => ({ k: g as FoodGroup | 'mine', n: GROUP_NAME[g] })), ...(mine.length ? [{ k: 'mine' as const, n: '내 음식' }] : [])]}
+                value={group} onToggle={(g) => setGroup(g)} />
+            ) : null}
+            <Pills options={[...shown, { k: '__new', n: '+ 직접 입력' }]} value={picked} onToggle={pick} />
           </>
         ) : (
           <>
@@ -114,11 +174,21 @@ export default function FoodScreen() {
             <Button label="목록에서 고르기" kind="ghost" onPress={() => setCustom(false)} style={{ alignSelf: 'flex-start' }} />
           </>
         )}
-        <Row gap={Space.md}><Stepper label="먹은 양 (인분)" value={qty} onChange={setQty} step={0.5} min={0.5} max={20} /></Row>
-        {current && current.k ? (
-          <T v="muted">{Math.round(current.k * qty)}kcal · 단백질 {Math.round(current.p * qty)}g · 탄수화물 {Math.round(current.c * qty)}g · 지방 {Math.round(current.f * qty)}g</T>
+        {def ? (
+          <Row gap={Space.md}><Stepper label={`먹은 양 (${def.unit})`} value={amt} onChange={setAmt} step={def.step} min={def.step} max={def.step * 100} format={(v) => amountLabel(def, v)} /></Row>
+        ) : (
+          <Row gap={Space.md}><Stepper label="먹은 양 (인분)" value={qty} onChange={setQty} step={0.5} min={0.5} max={20} /></Row>
+        )}
+        {preview && preview.k ? (
+          <T v="muted">{Math.round(preview.k)}kcal · 단백질 {Math.round(preview.p)}g · 탄수화물 {Math.round(preview.c)}g · 지방 {Math.round(preview.f)}g</T>
         ) : null}
-        <Button label="먹은 음식 추가" kind="primary" onPress={save} style={{ paddingVertical: 13 }} />
+        <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
+          {def ? (
+            <Button label="대체 식단" style={{ flex: 1, paddingVertical: 13 }}
+              onPress={() => setSwapFor({ target: { label: foodLabel(def, amt), macros: macrosOf(def, amt), def } })} />
+          ) : null}
+          <Button label="먹은 음식 추가" kind="primary" onPress={save} style={{ flex: 2, paddingVertical: 13 }} />
+        </Row>
       </Card>
 
       <T v="label">먹은 음식</T>
@@ -130,9 +200,15 @@ export default function FoodScreen() {
             <T v="small">단백질 {Math.round(m.p)}g · 탄수화물 {Math.round(m.c)}g · 지방 {Math.round(m.f)}g</T>
           </View>
           <T v="num" style={{ fontSize: 16 }}>{Math.round(m.kcal)}kcal</T>
+          <Button label="바꾸기" onPress={() => setSwapFor({
+            target: { label: m.qty !== 1 ? `${m.name} × ${m.qty}` : m.name, macros: { k: m.kcal, p: m.p, c: m.c, f: m.f }, def: findFood(m.name) },
+            replace: m,
+          })} />
           <ConfirmButton label="삭제" onConfirm={() => { removeMeal(m.id); toast('삭제됨'); }} />
         </View>
       ))}
+      <SwapSheet target={swapFor?.target ?? null} action={swapFor?.replace ? '이걸로 바꾸기' : '이걸로 추가'}
+        onClose={() => setSwapFor(null)} onApply={applySwap} />
     </Screen>
   );
 }

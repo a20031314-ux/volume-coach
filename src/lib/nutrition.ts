@@ -1,16 +1,7 @@
 import { body, proteinTarget, type Body } from './profile';
-import type { BodyComp, Food, Profile, WorkoutLog } from './types';
+import type { BodyComp, Profile, WorkoutLog } from './types';
 
-/** Approximate values per serving. */
-export const FOODS: Food[] = ([
-  ['닭가슴살 100g', 109, 23, 0, 1.5], ['계란 1개', 72, 6.3, 0.4, 4.8], ['흰쌀밥 1공기 (210g)', 315, 5.5, 69, 0.6],
-  ['현미밥 1공기 (210g)', 315, 6.5, 66, 2.4], ['고구마 1개 (150g)', 130, 2.4, 30, 0.2], ['바나나 1개', 105, 1.3, 27, 0.4],
-  ['오트밀 40g', 150, 5, 27, 2.8], ['단백질 보충제 1스쿱', 120, 24, 3, 1.5], ['그릭요거트 무가당 100g', 80, 9, 4, 3],
-  ['우유 200ml', 130, 6.4, 9.6, 7.6], ['두부 반 모 (150g)', 120, 12, 3, 7], ['소고기 우둔 100g', 140, 22, 0, 5.5],
-  ['돼지 안심 100g', 120, 22, 0, 3.5], ['연어 100g', 208, 20, 0, 13], ['참치캔 (기름 뺀 100g)', 120, 26, 0, 1.5],
-  ['아몬드 20g', 115, 4, 4, 10], ['사과 1개', 95, 0.5, 25, 0.3], ['식빵 1장', 80, 2.7, 15, 1],
-  ['김치찌개 1인분', 250, 15, 12, 15], ['삼겹살 100g', 330, 17, 0, 29],
-] as [string, number, number, number, number][]).map(([n, k, p, c, f]) => ({ n, k, p, c, f }));
+export { FOODS } from './foods';
 
 export interface NutritionTargets {
   kcal: number; p: number; c: number; f: number;
