@@ -298,8 +298,20 @@ export interface Settings {
   oneRm?: Partial<Record<string, number>>;
   /** 식단 추천 at set meal times */
   mealPlan: MealPlanSettings;
+  /** 식사 코스 the user saved (고깃집 + 볶음밥 …) */
+  courses?: SavedCourse[];
   updatedAt: number;
 }
+
+export interface CourseItem {
+  /** built-in food name */
+  n: string;
+  /** amount for the whole table, in the food's unit */
+  amt: number;
+  /** eaten this time */
+  on: boolean;
+}
+export interface SavedCourse { name: string; people: number; items: CourseItem[] }
 
 export interface MealPlanSettings {
   on: boolean;

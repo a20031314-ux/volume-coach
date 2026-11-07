@@ -228,6 +228,34 @@ export function Meter({ pct, color, height = 6 }: { pct: number; color: string; 
   );
 }
 
+/**
+ * A day bar split into meals: each segment is one meal's share of the goal, in the same hue
+ * fading meal by meal (the meal list shows the same shade). Past the goal the bar rescales so the
+ * goal sits at a tick and the overflow shows in the warning color.
+ */
+export function SegMeter({ parts, goal, color, height = 10 }: { parts: number[]; goal: number; color: string; height?: number }) {
+  const c = usePalette();
+  const total = parts.reduce((a, b) => a + b, 0);
+  const scale = Math.max(goal, total) || 1;
+  // each meal's part inside the goal and past it
+  const segs = parts.map((v, i) => {
+    const before = parts.slice(0, i).reduce((a, b) => a + b, 0);
+    const inGoal = Math.max(0, Math.min(v, goal - before));
+    return { inGoal, over: v - inGoal };
+  });
+  return (
+    <View style={{ height, borderRadius: height / 2, backgroundColor: c.restSoft, overflow: 'hidden', flexDirection: 'row' }}>
+      {segs.map(({ inGoal, over }, i) => [
+        inGoal > 0 ? <View key={`a${i}`} style={{ width: `${(inGoal / scale) * 100}%`, backgroundColor: color, opacity: segOpacity(i), borderRightWidth: 2, borderColor: c.surface }} /> : null,
+        over > 0 ? <View key={`b${i}`} style={{ width: `${(over / scale) * 100}%`, backgroundColor: c.bad, opacity: segOpacity(i), borderRightWidth: 2, borderColor: c.surface }} /> : null,
+      ])}
+      {total > goal ? <View style={{ position: 'absolute', left: `${(goal / scale) * 100}%`, top: 0, bottom: 0, width: 2, backgroundColor: c.ink }} /> : null}
+    </View>
+  );
+}
+/** meal 1 full strength, later meals lighter */
+export const segOpacity = (i: number) => Math.max(0.35, 1 - i * 0.22);
+
 export function Banner({ text, tone = 'warn' }: { text: string; tone?: 'warn' | 'accent' }) {
   const c = usePalette();
   return (

@@ -2,16 +2,18 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { CourseSheet } from '@/components/course-sheet';
 import { Disclosure } from '@/components/layout';
 import { MealRecCard } from '@/components/meal-rec';
 import { SwapOption, SwapSheet, type SwapTarget } from '@/components/swap-sheet';
 import { useToast } from '@/components/toast';
-import { Button, Card, ConfirmButton, DayNav, Field, Meter, NumField, Pills, Row, Screen, Stepper, T } from '@/components/ui';
+import { Button, Card, ConfirmButton, DayNav, Field, NumField, Pills, Row, Screen, SegMeter, Stepper, T, segOpacity } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { usePreferredFoods } from '@/hooks/use-diet-report';
 import { useNextMeal } from '@/hooks/use-meal-plan';
 import { addDays, fmt, today } from '@/lib/dates';
 import { FOOD_DB, GROUP_NAME, amountLabel, findFood, foodLabel, macrosOf, type FoodDef, type FoodGroup } from '@/lib/foods';
+import { groupMeals, warnText } from '@/lib/meal-groups';
 import { nutritionTargets } from '@/lib/nutrition';
 import { swaps, type SwapPart } from '@/lib/swap';
 import type { Food, Meal } from '@/lib/types';
@@ -44,6 +46,7 @@ export default function FoodScreen() {
   const [group, setGroup] = useState<FoodGroup | 'mine'>('protein');
   /** amount in the picked built-in food's own unit (g, 개, 공기…) */
   const [amt, setAmt] = useState(100);
+  const [courseOpen, setCourseOpen] = useState(false);
   const [swapFor, setSwapFor] = useState<{ target: SwapTarget; replace?: Meal } | null>(null);
 
   const q = query.trim();
@@ -110,11 +113,13 @@ export default function FoodScreen() {
     return swaps({ p: Math.min(p, 40), k: Math.min(k, 450), c: Math.min(Math.max(0, t.c - sum.c), 50), f: Math.min(Math.max(0, t.f - sum.f), 12) }, { primary: 'p', loose: true, limit: 2, prefer });
   }, [t, date, sum.p, sum.k, sum.c, sum.f, prefer]);
 
-  const macro = (name: string, got: number, goal: number, color: string) => (
+  const groups = useMemo(() => groupMeals(eaten, t, settings.mealPlan.on ? settings.mealPlan.times : undefined),
+    [eaten, t, settings.mealPlan.on, settings.mealPlan.times]);
+  const macro = (name: string, key: 'k' | 'p' | 'c' | 'f', got: number, goal: number, color: string, unit = 'g') => (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: Space.md }}>
       <T style={{ width: 60, fontSize: 14 }}>{name}</T>
-      <View style={{ flex: 1 }}><Meter pct={goal ? (got / goal) * 100 : 0} color={got > goal * 1.1 ? c.warn : color} height={10} /></View>
-      <T v="num" style={{ fontSize: 16, width: 92, textAlign: 'right' }}>{Math.round(got)}<T v="small"> / {goal}g</T></T>
+      <View style={{ flex: 1 }}><SegMeter parts={groups.map((g) => g.sum[key])} goal={goal} color={color} /></View>
+      <T v="num" style={{ fontSize: 16, width: 104, textAlign: 'right', color: key !== 'p' && got > goal * 1.1 ? c.bad : c.ink }}>{Math.round(got)}<T v="small"> / {goal}{unit}</T></T>
     </View>
   );
   const left = t ? t.kcal - Math.round(sum.k) : 0;
@@ -130,9 +135,20 @@ export default function FoodScreen() {
             <Row gap={4} style={{ alignItems: 'baseline' }}><T v="big">{Math.abs(left)}</T><T v="muted">kcal {left >= 0 ? '남음' : '초과'}</T></Row>
             <T v="muted">목표 {t.kcal} · 먹은 {Math.round(sum.k)}</T>
           </Row>
-          {macro('단백질', sum.p, t.p, c.accent)}
-          {macro('탄수화물', sum.c, t.c, c.ok)}
-          {macro('지방', sum.f, t.f, c.rest)}
+          {macro('칼로리', 'k', sum.k, t.kcal, c.ink, '')}
+          {macro('단백질', 'p', sum.p, t.p, c.accent)}
+          {macro('탄수화물', 'c', sum.c, t.c, c.ok)}
+          {macro('지방', 'f', sum.f, t.f, c.rest)}
+          {groups.length > 1 ? (
+            <Row gap={Space.md}>
+              {groups.map((g, i) => (
+                <Row key={g.key} gap={4}>
+                  <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: c.ink, opacity: segOpacity(i) }} />
+                  <T v="small">{g.name}</T>
+                </Row>
+              ))}
+            </Row>
+          ) : null}
           <Disclosure title="계산 근거">
             <T v="small">{t.adjustLabel} · 유지 약 {t.tdee}kcal · {t.trainingDay ? '운동한 날 +100' : '쉬는 날 −100'}</T>
             <T v="small">단백질 {t.proteinBasis}</T>
@@ -160,8 +176,8 @@ export default function FoodScreen() {
           <>
             <Field label="음식 찾기" value={query} onChangeText={setQuery} placeholder="예: 연어" />
             {!q ? (
-              <Pills options={[...(Object.keys(GROUP_NAME) as FoodGroup[]).map((g) => ({ k: g as FoodGroup | 'mine', n: GROUP_NAME[g] })), ...(mine.length ? [{ k: 'mine' as const, n: '내 음식' }] : [])]}
-                value={group} onToggle={(g) => setGroup(g)} />
+              <Pills options={[...(Object.keys(GROUP_NAME) as FoodGroup[]).map((g) => ({ k: g as FoodGroup | 'mine' | 'course', n: GROUP_NAME[g] })), ...(mine.length ? [{ k: 'mine' as const, n: '내 음식' }] : []), { k: 'course' as const, n: '+ 식사 코스' }]}
+                value={group} onToggle={(g) => (g === 'course' ? setCourseOpen(true) : setGroup(g))} />
             ) : null}
             <Pills options={[...shown, { k: '__new', n: '+ 직접 입력' }]} value={picked} onToggle={pick} />
           </>
@@ -201,20 +217,46 @@ export default function FoodScreen() {
 
       <T v="label">먹은 음식</T>
       {!eaten.length ? <T v="muted" style={{ textAlign: 'center', paddingVertical: Space.lg }}>아직 기록한 음식이 없어요.</T> : null}
-      {eaten.map((m) => (
-        <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: 8, borderBottomWidth: 1, borderColor: c.line }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <T>{m.name}{m.qty !== 1 ? ` × ${m.qty}` : ''}</T>
-            <T v="small">단백질 {Math.round(m.p)}g · 탄수화물 {Math.round(m.c)}g · 지방 {Math.round(m.f)}g</T>
+      {groups.map((g, gi) => (
+        <View key={g.key} style={{ gap: 0 }}>
+          <View style={{ gap: 4, paddingTop: Space.sm, paddingBottom: 6, borderBottomWidth: 1, borderColor: c.line }}>
+            <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+              <Row gap={6}>
+                <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: c.ink, opacity: segOpacity(gi) }} />
+                <T v="title" style={{ fontSize: 15 }}>{g.name}</T>
+              </Row>
+              <T v="num" style={{ fontSize: 15 }}>{Math.round(g.sum.k)}kcal{g.pct ? <T v="small"> · 하루의 {Math.round(g.pct.k)}%</T> : null}</T>
+            </Row>
+            {g.pct ? (
+              <T v="small">단백질 {Math.round(g.sum.p)}g ({Math.round(g.pct.p)}%) · 탄수화물 {Math.round(g.sum.c)}g ({Math.round(g.pct.c)}%) · 지방 {Math.round(g.sum.f)}g ({Math.round(g.pct.f)}%)</T>
+            ) : null}
+            {g.warns.map((w) => (
+              <Row key={warnText(w)} gap={6} style={{ flexWrap: 'nowrap' }}>
+                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: w.kind === 'over' ? c.bad : c.warn, alignItems: 'center', justifyContent: 'center' }}>
+                  <T style={{ color: c.surface, fontSize: 11, fontWeight: '800', lineHeight: 14 }}>!</T>
+                </View>
+                <T v="small" style={{ color: w.kind === 'over' ? c.bad : c.warn, fontWeight: '600', flexShrink: 1 }}>{warnText(w)}</T>
+              </Row>
+            ))}
           </View>
-          <T v="num" style={{ fontSize: 16 }}>{Math.round(m.kcal)}kcal</T>
-          <Button label="바꾸기" onPress={() => setSwapFor({
-            target: { label: m.qty !== 1 ? `${m.name} × ${m.qty}` : m.name, macros: { k: m.kcal, p: m.p, c: m.c, f: m.f }, def: findFood(m.name) },
-            replace: m,
-          })} />
-          <ConfirmButton label="삭제" onConfirm={() => { removeMeal(m.id); toast('삭제됨'); }} />
+          {g.items.map((m) => (
+            <View key={m.id} style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: 8, borderBottomWidth: 1, borderColor: c.line }}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <T>{m.name}{m.qty !== 1 ? ` × ${m.qty}` : ''}</T>
+                <T v="small">단백질 {Math.round(m.p)}g · 탄수화물 {Math.round(m.c)}g · 지방 {Math.round(m.f)}g</T>
+              </View>
+              <T v="num" style={{ fontSize: 16 }}>{Math.round(m.kcal)}kcal</T>
+              <Button label="바꾸기" onPress={() => setSwapFor({
+                target: { label: m.qty !== 1 ? `${m.name} × ${m.qty}` : m.name, macros: { k: m.kcal, p: m.p, c: m.c, f: m.f }, def: findFood(m.name) },
+                replace: m,
+              })} />
+              <ConfirmButton label="삭제" onConfirm={() => { removeMeal(m.id); toast('삭제됨'); }} />
+            </View>
+          ))}
         </View>
       ))}
+      <CourseSheet open={courseOpen} onClose={() => setCourseOpen(false)} dayKcal={t?.kcal}
+        onAdd={(name, lines) => { addParts(lines.map((l) => ({ food: l.food, amt: l.amt })), nowMs()); toast(`${name} 내 몫 추가됨`); }} />
       <SwapSheet target={swapFor?.target ?? null} action={swapFor?.replace ? '이걸로 바꾸기' : '이걸로 추가'}
         onClose={() => setSwapFor(null)} onApply={applySwap} />
     </Screen>
