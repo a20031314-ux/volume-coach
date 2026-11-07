@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { CheatCard } from '@/components/cheat-card';
 import { CourseSheet } from '@/components/course-sheet';
 import { Disclosure } from '@/components/layout';
 import { MealRecCard } from '@/components/meal-rec';
@@ -16,7 +17,7 @@ import { BRAND_SOURCES } from '@/lib/brands';
 import { LOOKUP_MESSAGE, SOURCE_NAME, aiLookup, keepCloudFood, reportFood, searchShared, useCloudFoods } from '@/lib/food-lookup';
 import { FOOD_DB, GROUP_NAME, amountLabel, findFood, foodLabel, macrosOf, type FoodDef, type FoodGroup } from '@/lib/foods';
 import { groupMeals, warnText } from '@/lib/meal-groups';
-import { nutritionTargets } from '@/lib/nutrition';
+import { dayTarget } from '@/lib/day-target';
 import { swaps, type SwapPart } from '@/lib/swap';
 import type { Food, Meal } from '@/lib/types';
 import { live, useData } from '@/store/store';
@@ -82,7 +83,7 @@ export default function FoodScreen() {
   };
   const def: FoodDef | null = !custom ? findDef(picked) : null;
   const myFood: Food | null = !custom && picked?.startsWith('my:') ? mine.find((f) => `my:${f.n}` === picked) ?? null : null;
-  const t = useMemo(() => nutritionTargets(settings.profile, live(bodyT), live(logsT), date), [settings.profile, bodyT, logsT, date]);
+  const t = useMemo(() => dayTarget({ settings, comps: live(bodyT), logs: live(logsT), meals: live(mealsT) }, date, today()), [settings, bodyT, logsT, mealsT, date]);
   const eaten = useMemo(() => live(mealsT).filter((m) => m.date === date).sort((a, b) => a.at - b.at), [mealsT, date]);
   const sum = eaten.reduce((a, m) => ({ k: a.k + m.kcal, p: a.p + m.p, c: a.c + m.c, f: a.f + m.f }), { k: 0, p: 0, c: 0, f: 0 });
 
@@ -172,6 +173,7 @@ export default function FoodScreen() {
             <Row gap={4} style={{ alignItems: 'baseline' }}><T v="big">{Math.abs(left)}</T><T v="muted">kcal {left >= 0 ? '남음' : '초과'}</T></Row>
             <T v="muted">목표 {t.kcal} · 먹은 {Math.round(sum.k)}</T>
           </Row>
+          {t.cheat.label ? <T v="small">오늘 목표 {t.base} → {t.kcal}kcal ({t.cheat.label})</T> : null}
           {macro('칼로리', 'k', sum.k, t.kcal, c.ink, '')}
           {macro('단백질', 'p', sum.p, t.p, c.accent)}
           {macro('탄수화물', 'c', sum.c, t.c, c.ok)}
@@ -198,6 +200,7 @@ export default function FoodScreen() {
           <T v="small">지금 먹은 양: {Math.round(sum.k)}kcal · 단백질 {Math.round(sum.p)}g · 탄수화물 {Math.round(sum.c)}g · 지방 {Math.round(sum.f)}g</T>
         </Card>
       )}
+      {date === today() ? <CheatCard t={t} /> : null}
       {next && date === today() ? (
         <MealRecCard meal={next} onEat={(parts) => { addParts(parts, nowMs()); toast('추가됨'); }} />
       ) : null}

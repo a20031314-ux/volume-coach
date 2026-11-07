@@ -300,7 +300,31 @@ export interface Settings {
   mealPlan: MealPlanSettings;
   /** 식사 코스 the user saved (고깃집 + 볶음밥 …) */
   courses?: SavedCourse[];
+  /** 치팅데이 저금통 + 상쇄 */
+  cheat?: CheatSettings;
   updatedAt: number;
+}
+
+/** A payback plan for one day that went over: `cut` kcal/day off the target for `days` days from `from`. */
+export interface Offset { src: string; from: string; days: number; cut: number; over: number; moveKcal: number; walkMin: number; runMin: number }
+
+export interface CheatSettings {
+  on: boolean;
+  mode: 'weekly' | 'date';
+  /** weekly: 0 = Sunday … 6 = Saturday */
+  dow: number;
+  /** date mode: the planned day, and when saving for it started */
+  date: string | null;
+  since: string | null;
+  /** extra kcal the gauge fills toward */
+  budget: number;
+  /** kcal taken off the target each day before the cheat day (0 = just bank what's left) */
+  save: number;
+  offsetDays: number;
+  offsetMix: 'diet' | 'mix' | 'move';
+  offsets: Offset[];
+  /** overeating days the user chose not to offset */
+  dismissed: string[];
 }
 
 export interface CourseItem {

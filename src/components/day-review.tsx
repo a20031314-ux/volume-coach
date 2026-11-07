@@ -8,7 +8,7 @@ import { Space, usePalette } from '@/constants/theme';
 import { useNow } from '@/hooks/use-now';
 import { today } from '@/lib/dates';
 import { MUSCLE_NAME } from '@/lib/exercises';
-import { nutritionTargets } from '@/lib/nutrition';
+import { dayTarget } from '@/lib/day-target';
 import { body } from '@/lib/profile';
 import { dayBurn, dayIntake, liftVolume, reviewNotes } from '@/lib/review';
 import { live, useData } from '@/store/store';
@@ -31,7 +31,7 @@ export function DayReview({ date }: { date: string }) {
 
   const r = useMemo(() => {
     const logs = live(logsT), sessions = live(sessionsT);
-    const t = nutritionTargets(settings.profile, live(bodyT), logs, date);
+    const t = dayTarget({ settings, comps: live(bodyT), logs, meals: live(mealsT) }, date, today());
     const weightKg = body(settings.profile, live(bodyT))?.weight || 70;
     const frac = isToday ? Math.min(1, (now.getHours() * 60 + now.getMinutes()) / 1440) : 1;
     const burn = dayBurn(t?.bmr ?? Math.round(weightKg * 22), a, settings.profile.act, frac);
@@ -39,7 +39,7 @@ export function DayReview({ date }: { date: string }) {
     const vol = liftVolume(logs, sessions, date);
     const targets = t ? { kcal: t.kcal, p: t.p, c: t.c, f: t.f, bmr: t.bmr } : null;
     return { burn, intake, vol, targets, notes: reviewNotes({ intake, targets, burn, isToday, weightKg }) };
-  }, [logsT, sessionsT, mealsT, bodyT, settings.profile, date, a, isToday, now]);
+  }, [logsT, sessionsT, mealsT, bodyT, settings, date, a, isToday, now]);
 
   const [note, setNote] = useState(check?.note ?? '');
   const [prevKey, setPrevKey] = useState(date);
