@@ -75,6 +75,7 @@ function withDefaults(p: Partial<Settings> | undefined): Settings {
     ability: { ...DEFAULT_SETTINGS.ability, ...(p?.ability ?? {}) },
     exercisePrefs: p?.exercisePrefs ?? {},
     dismissed: p?.dismissed ?? [],
+    mealPlan: { ...DEFAULT_SETTINGS.mealPlan, ...(p?.mealPlan ?? {}) },
     run: { ...DEFAULT_SETTINGS.run, ...(p?.run ?? {}), interval: { ...DEFAULT_SETTINGS.run.interval, ...(p?.run?.interval ?? {}) } },
   };
 }

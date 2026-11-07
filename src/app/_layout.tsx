@@ -6,16 +6,22 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { useColorScheme } from 'react-native';
+import { Platform, useColorScheme } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { ExerciseMenuProvider } from '@/components/exercise-menu';
 import { ToastProvider } from '@/components/toast';
 import { Palettes } from '@/constants/theme';
 import { AuthProvider } from '@/store/auth';
+import { useMealReminders } from '@/store/meal-reminders';
 import { useData } from '@/store/store';
 
 SplashScreen.preventAutoHideAsync();
+
+function MealReminders() {
+  useMealReminders();
+  return null;
+}
 
 export default function RootLayout() {
   const scheme = useColorScheme();
@@ -37,6 +43,7 @@ export default function RootLayout() {
           <ToastProvider>
             <ExerciseMenuProvider>
             <StatusBar style="auto" />
+            {Platform.OS !== 'web' ? <MealReminders /> : null}
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="setup" options={{ gestureEnabled: false }} />
@@ -54,6 +61,7 @@ export default function RootLayout() {
               <Stack.Screen name="activity/run" options={{ headerShown: true, title: '유산소' }} />
               <Stack.Screen name="activity/lifts" options={{ headerShown: true, title: '웨이트 기록' }} />
               <Stack.Screen name="activity/move" options={{ headerShown: true, title: '걷기' }} />
+              <Stack.Screen name="prefs/meal-plan" options={{ headerShown: true, title: '식단 추천' }} />
               <Stack.Screen name="diet-report" options={{ headerShown: true, title: '내 식습관' }} />
               <Stack.Screen name="run-map" options={{ headerShown: true, title: '경로' }} />
               <Stack.Screen name="prefs/health" options={{ headerShown: true, title: '걸음 수' }} />

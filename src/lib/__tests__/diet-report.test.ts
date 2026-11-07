@@ -81,6 +81,8 @@ describe('dietReport', () => {
   it('lists foods eaten on 2+ days as swap preferences', () => {
     expect(rep.prefer).toContain('닭가슴살');
     expect(rep.prefer).toContain('계란');
+    expect(rep.preferBySlot.morning[0]).toMatch(/계란|오트밀/);
+    expect(rep.preferBySlot.lunch).not.toContain('계란');
   });
 });
 

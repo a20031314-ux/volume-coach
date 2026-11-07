@@ -296,7 +296,15 @@ export interface Settings {
   program?: StrengthProgram | null;
   /** 1RMs the user typed in, by exercise (override estimates from logs) */
   oneRm?: Partial<Record<string, number>>;
+  /** 식단 추천 at set meal times */
+  mealPlan: MealPlanSettings;
   updatedAt: number;
+}
+
+export interface MealPlanSettings {
+  on: boolean;
+  /** minutes after midnight, ascending */
+  times: number[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -310,6 +318,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dismissed: [],
   planMode: 'auto',
   activeRoutineId: null,
+  mealPlan: { on: false, times: [8 * 60, 12 * 60 + 30, 19 * 60] },
   run: {
     voice: true, kmAlert: true, everyMin: 0, mode: 'free',
     interval: { warmupS: 300, workS: 240, restS: 180, repeats: 5, cooldownS: 300, targetPaceS: null },

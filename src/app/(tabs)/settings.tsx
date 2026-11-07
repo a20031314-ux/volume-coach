@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { Group, ListRow } from '@/components/layout';
 import { Screen, T } from '@/components/ui';
 import { HEALTH_NAME } from '@/health/steps';
+import { hhmm } from '@/lib/meal-plan';
 import { SHORT } from '@/lib/strength';
 import { useHealth } from '@/health/use-steps';
 import { bodySource, latestBodyComp } from '@/lib/profile';
@@ -44,7 +45,8 @@ export default function SettingsScreen() {
 
       <Group title="나">
         <ListRow label="내 정보" value={[p.age ? `${p.age}세` : null, GOAL[p.goal]].filter(Boolean).join(' · ')} onPress={() => router.push('/prefs/profile')} />
-        <ListRow label="신체 정보" value={bodyValue} onPress={() => router.push('/prefs/body')} last />
+        <ListRow label="신체 정보" value={bodyValue} onPress={() => router.push('/prefs/body')} />
+        <ListRow label="식단 추천" value={s.mealPlan.on ? s.mealPlan.times.map(hhmm).join(' · ') : '꺼짐'} onPress={() => router.push('/prefs/meal-plan')} last />
       </Group>
 
       <Group title="계정">

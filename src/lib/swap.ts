@@ -37,7 +37,7 @@ const add = (a: Macros, b: Macros): Macros => ({ k: a.k + b.k, p: a.p + b.p, c: 
 const ZERO: Macros = { k: 0, p: 0, c: 0, f: 0 };
 
 /** an amount someone would actually eat in one go */
-function sensible(d: FoodDef, amt: number): boolean {
+export function sensible(d: FoodDef, amt: number): boolean {
   if (amt <= 0) return false;
   const grams = d.unit === 'g' || d.unit === 'ml' ? amt : d.gPer ? d.gPer * amt : null;
   if (grams != null && grams > 450) return false;

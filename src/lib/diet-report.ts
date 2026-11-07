@@ -95,6 +95,8 @@ export interface DietReport {
   shortSlot: Slot | null;
   /** foods to try first in swaps, most eaten first */
   prefer: string[];
+  /** the same, per time of day (what gets eaten at lunch isn't breakfast) */
+  preferBySlot: Record<Slot, string[]>;
   notes: string[];
 }
 
@@ -115,6 +117,8 @@ export function dietReport(meals: Meal[], opts: { to: string; days: number; targ
   const carb = new Map<CarbSource, number>();
   const slotP = new Map<Slot, number>(), slotK = new Map<Slot, number>();
   const emptySlots = (): Record<Slot, number> => ({ morning: 0, lunch: 0, afternoon: 0, dinner: 0, night: 0 });
+  /** slot → food → dates eaten */
+  const slotFoods = new Map<Slot, Map<string, Set<string>>>();
 
   for (const m of inRange) {
     const { key, def } = foodKey(m.name);
@@ -128,6 +132,12 @@ export function dietReport(meals: Meal[], opts: { to: string; days: number; targ
     }
     d.p += m.p;
     d.slots[slot] += m.p;
+
+    if (def?.n === key) {
+      const sf = slotFoods.get(slot) ?? new Map<string, Set<string>>();
+      slotFoods.set(slot, sf);
+      sf.set(key, (sf.get(key) ?? new Set<string>()).add(m.date));
+    }
 
     let f = foods.get(key);
     if (!f) { f = { name: key, times: 0, days: 0, p: 0, kcal: 0, source: src, dates: new Set() }; foods.set(key, f); }
@@ -188,6 +198,8 @@ export function dietReport(meals: Meal[], opts: { to: string; days: number; targ
     shortSlot,
     // built-in foods eaten on 2+ days, most days first
     prefer: top.filter((f) => f.days >= 2 && findFood(f.name)?.n === f.name).map((f) => f.name),
+    preferBySlot: Object.fromEntries(SLOTS.map((s) => [s, [...(slotFoods.get(s) ?? new Map<string, Set<string>>()).entries()]
+      .filter(([, d]) => d.size >= 2).sort((a, b) => b[1].size - a[1].size).map(([n]) => n)])) as Record<Slot, string[]>,
     notes: [],
   };
   report.notes = dietNotes(report);

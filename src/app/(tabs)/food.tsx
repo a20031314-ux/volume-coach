@@ -3,11 +3,13 @@ import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Disclosure } from '@/components/layout';
+import { MealRecCard } from '@/components/meal-rec';
 import { SwapOption, SwapSheet, type SwapTarget } from '@/components/swap-sheet';
 import { useToast } from '@/components/toast';
 import { Button, Card, ConfirmButton, DayNav, Field, Meter, NumField, Pills, Row, Screen, Stepper, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { usePreferredFoods } from '@/hooks/use-diet-report';
+import { useNextMeal } from '@/hooks/use-meal-plan';
 import { addDays, fmt, today } from '@/lib/dates';
 import { FOOD_DB, GROUP_NAME, amountLabel, findFood, foodLabel, macrosOf, type FoodDef, type FoodGroup } from '@/lib/foods';
 import { nutritionTargets } from '@/lib/nutrition';
@@ -30,6 +32,7 @@ export default function FoodScreen() {
   const removeMeal = useData((s) => s.removeMeal);
   const updateSettings = useData((s) => s.updateSettings);
   const prefer = usePreferredFoods();
+  const next = useNextMeal();
 
   const [date, setDate] = useState(today());
   const [query, setQuery] = useState('');
@@ -142,7 +145,10 @@ export default function FoodScreen() {
           <T v="small">지금 먹은 양: {Math.round(sum.k)}kcal · 단백질 {Math.round(sum.p)}g · 탄수화물 {Math.round(sum.c)}g · 지방 {Math.round(sum.f)}g</T>
         </Card>
       )}
-      {fill.length && t ? (<>
+      {next && date === today() ? (
+        <MealRecCard meal={next} onEat={(parts) => { addParts(parts, nowMs()); toast('추가됨'); }} />
+      ) : null}
+      {!next && fill.length && t ? (<>
         <T v="muted">단백질이 {Math.round(t.p - sum.p)}g 남았어요. 한 끼로 채우면:</T>
         {fill.map((s) => (
           <SwapOption key={s.parts.map((p) => p.food.n).join('|')} s={s} action="먹은 음식에 추가" onPick={() => { addParts(s.parts, nowMs()); toast('추가됨'); }} />
