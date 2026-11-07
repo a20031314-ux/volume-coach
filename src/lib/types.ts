@@ -346,6 +346,14 @@ export interface FixedItem {
   dows: number[];
   /** time set by hand (kept when suggestions are re-applied on check/uncheck) */
   custom?: boolean;
+  /** brand and product, e.g. 쏜리 · Basic Nutrients 2/Day */
+  brand?: string;
+  product?: string;
+  /** amount of the active ingredient per unit, e.g. 200 (mg) */
+  dose?: number | null;
+  doseUnit?: 'mg' | 'μg' | 'IU' | 'g' | null;
+  /** a supplement that isn't in the food list (named by the user, no calories) */
+  free?: boolean;
 }
 export interface FixedSettings {
   items: FixedItem[];

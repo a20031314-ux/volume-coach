@@ -5,6 +5,7 @@ import { Pressable, Text, View } from 'react-native';
 import { Button, Card, Row, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { toggleFixed, useFixedToday } from '@/hooks/use-fixed';
+import { itemLabel } from '@/lib/fixed';
 import { amountLabel } from '@/lib/foods';
 import { hhmm } from '@/lib/meal-plan';
 import { useData } from '@/store/store';
@@ -30,7 +31,7 @@ export function FixedCard({ date }: { date: string }) {
           <T v="small" style={{ width: 42 }}>{hhmm(r.item.time)}</T>
           <View style={{ flex: 1, minWidth: 0 }}>
             <T numberOfLines={1} style={{ textDecorationLine: r.logged ? 'line-through' : 'none', color: r.logged ? c.muted : c.ink }}>
-              {r.item.n} {r.food ? amountLabel(r.food, r.item.amt) : '(목록에 없음)'}
+              {itemLabel(r.item)} <T v="small">{r.food ? amountLabel(r.food, r.item.amt) : '(목록에 없음)'}</T>
             </T>
           </View>
           <T v="small">{Math.round(r.macros.k)}kcal</T>

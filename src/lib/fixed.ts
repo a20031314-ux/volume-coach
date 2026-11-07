@@ -22,9 +22,19 @@ export function fixedFor(f: FixedSettings, date: string): FixedItem[] {
 
 export interface FixedRow { item: FixedItem; food: FoodDef | undefined; macros: Macros; logged: Meal | undefined }
 
+/** a supplement the user named that isn't in the list: no calories, counted in 정 */
+export const freeDef = (n: string): FoodDef => ({ n, unit: '정', base: 1, step: 1, k: 0, p: 0, c: 0, f: 0, g: 'supp' });
+
+/** "마그네슘 · 쏜리 Magnesium Bisglycinate · 200mg" */
+export function itemLabel(x: FixedItem): string {
+  const brand = [x.brand, x.product].filter(Boolean).join(' ');
+  const dose = x.dose ? `${x.dose}${x.doseUnit ?? 'mg'}` : '';
+  return [x.n, brand, dose].filter(Boolean).join(' · ');
+}
+
 export function fixedRows(f: FixedSettings, date: string, meals: Meal[], extra: FoodDef[] = []): FixedRow[] {
   return fixedFor(f, date).map((item) => {
-    const food = defOf(item.n, extra);
+    const food = defOf(item.n, extra) ?? (item.free ? freeDef(item.n) : undefined);
     return {
       item, food,
       macros: food ? macrosOf(food, item.amt) : { k: 0, p: 0, c: 0, f: 0 },
@@ -45,7 +55,7 @@ export function fixedMeal(r: FixedRow, date: string): Omit<Meal, 'id' | 'updated
   at.setHours(Math.floor(r.item.time / 60), r.item.time % 60, 0, 0);
   const round = (x: number) => Math.round(x * 10) / 10;
   return {
-    date, name: foodLabel(r.food, r.item.amt), qty: 1,
+    date, name: `${foodLabel(r.food, r.item.amt)}${r.item.brand ? ` (${[r.item.brand, r.item.product].filter(Boolean).join(' ')})` : ''}`, qty: 1,
     kcal: round(r.macros.k), p: round(r.macros.p), c: round(r.macros.c), f: round(r.macros.f),
     at: at.getTime(), fixed: r.item.id,
   };
