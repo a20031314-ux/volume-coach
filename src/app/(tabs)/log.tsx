@@ -2,17 +2,17 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 
 import { useNow } from '@/hooks/use-now';
-import { Platform, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { useCardioTimer } from '@/components/cardio-panel';
 import { useDayActivity } from '@/components/day-activity';
-import { DayReview } from '@/components/day-review';
+import { DayReview, DayReviewLine } from '@/components/day-review';
 import { Sheet } from '@/components/layout';
 import { NowSpeed } from '@/components/now-speed';
 import { StepsChart } from '@/components/steps-chart';
 import { DayStrip, TlNode } from '@/components/timeline';
 import { useToast } from '@/components/toast';
-import { Button, Card, DayNav, Field, NumField, Pills, Row, Screen, Segmented, Stepper, T } from '@/components/ui';
+import { Button, Card, DayNav, Field, NumField, Pills, Row, Screen, Stepper, T } from '@/components/ui';
 import { WeekView } from '@/components/week-view';
 import { Space, usePalette } from '@/constants/theme';
 import { useDayBuckets, useHealth } from '@/health/use-steps';
@@ -29,11 +29,14 @@ import { useDayMove } from '@/move/use-move';
 import { useRun } from '@/run/tracker';
 import { live, useData } from '@/store/store';
 
-/** 기록: the whole day as one timeline; each item opens its own (workout → sets, run → pace). */
+/**
+ * 기록: one day. On top the day in one line (burn vs intake → full review), then activity, then the
+ * timeline; each item opens its own (workout → sets, run → pace). Weekly volume opens from the header.
+ */
 export default function Log() {
   const c = usePalette();
   const params = useLocalSearchParams<{ muscle?: string }>();
-  const [view, setView] = useState<'day' | 'review' | 'week'>('day');
+  const [sheet, setSheet] = useState<'review' | 'week' | null>(null);
   const [date, setDate] = useState(today());
   const [adding, setAdding] = useState<MuscleKey | null>(null);
 
@@ -42,7 +45,7 @@ export default function Log() {
   if (params.muscle !== prevParam) {
     setPrevParam(params.muscle);
     const m = params.muscle as MuscleKey | undefined;
-    if (m && MUSCLE_NAME[m]) { setDate(today()); setView('day'); setAdding(m); }
+    if (m && MUSCLE_NAME[m]) { setDate(today()); setSheet(null); setAdding(m); }
   }
 
   const logsT = useData((s) => s.logs);
@@ -83,17 +86,16 @@ export default function Log() {
   };
 
   return (
-    <Screen title="기록">
-      <Segmented options={[{ v: 'day', n: '타임라인' }, { v: 'review', n: '하루 회고' }, { v: 'week', n: '주간 볼륨' }]} value={view} onChange={(v) => v && setView(v)} />
-      {view === 'week' ? <WeekView /> : view === 'review' ? (<>
-        <DayNav date={date} label={date === today() ? `오늘 · ${fmt(date)}` : fmt(date)}
-          onPrev={() => setDate(addDays(date, -1))} onNext={() => { if (date !== today()) setDate(addDays(date, 1)); }} />
-        <DayReview date={date} />
-      </>) : (<>
+    <Screen title="기록" right={<Button label="주간 볼륨" kind="ghost" onPress={() => setSheet('week')} />}>
         <DayNav date={date} label={isToday ? `오늘 · ${fmt(date)}` : fmt(date)}
           onPrev={() => setDate(addDays(date, -1))} onNext={() => { if (!isToday) setDate(addDays(date, 1)); }} />
 
         <Card style={{ gap: Space.sm }}>
+          <Pressable accessibilityRole="button" accessibilityLabel="하루 회고 보기" onPress={() => setSheet('review')} style={{ gap: 2 }}>
+            <DayReviewLine date={date} />
+            <T v="small" style={{ color: c.accent }}>하루 회고 ›</T>
+          </Pressable>
+          <View style={{ height: 1, backgroundColor: c.line }} />
           <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
             <T style={{ flexShrink: 1 }} numberOfLines={1}>{line || '활동 없음'}</T>
             {activity.kcal ? <T v="num" style={{ fontSize: 15 }}>{activity.activeMin}분 · {activity.kcal}kcal</T> : null}
@@ -125,7 +127,13 @@ export default function Log() {
         {!health && Platform.OS !== 'web' ? (
           <Button label="걸음 수 연결하기" kind="ghost" onPress={() => router.push('/prefs/health')} style={{ alignSelf: 'center' }} />
         ) : null}
-      </>)}
+
+      <Sheet open={sheet === 'review'} title={`하루 회고 · ${fmt(date)}`} onClose={() => setSheet(null)}>
+        <DayReview date={date} />
+      </Sheet>
+      <Sheet open={sheet === 'week'} title="주간 볼륨" onClose={() => setSheet(null)}>
+        <WeekView />
+      </Sheet>
 
       <AddLift open={adding != null} initialMuscle={adding ?? 'chest'} date={date} onClose={() => setAdding(null)} />
     </Screen>

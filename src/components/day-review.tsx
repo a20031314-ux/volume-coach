@@ -16,8 +16,8 @@ import { live, useData } from '@/store/store';
 const n = (x: number) => Math.round(x).toLocaleString('ko-KR');
 
 /** 하루 회고: what was done, what it cost, what was eaten, and a note. */
-export function DayReview({ date }: { date: string }) {
-  const c = usePalette();
+/** The day's burn, intake and lifting volume — shared by the one-line summary and the full review. */
+export function useDayReview(date: string) {
   const now = useNow(60e3);
   const a = useDayActivity(date);
   const settings = useData((s) => s.settings);
@@ -25,8 +25,6 @@ export function DayReview({ date }: { date: string }) {
   const sessionsT = useData((s) => s.sessions);
   const mealsT = useData((s) => s.meals);
   const bodyT = useData((s) => s.bodyComps);
-  const check = useData((s) => s.checkins[date]);
-  const setCheckin = useData((s) => s.setCheckin);
   const isToday = date === today();
 
   const r = useMemo(() => {
@@ -40,6 +38,30 @@ export function DayReview({ date }: { date: string }) {
     const targets = t ? { kcal: t.kcal, p: t.p, c: t.c, f: t.f, bmr: t.bmr } : null;
     return { burn, intake, vol, targets, notes: reviewNotes({ intake, targets, burn, isToday, weightKg }) };
   }, [logsT, sessionsT, mealsT, bodyT, settings, date, a, isToday, now]);
+  return { ...r, isToday, a };
+}
+
+/** One line for the top of 기록: burn vs intake. */
+export function DayReviewLine({ date }: { date: string }) {
+  const c = usePalette();
+  const { burn, intake, isToday } = useDayReview(date);
+  const bal = intake.kcal - burn.total;
+  return (
+    <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+      <T v="small" style={{ flexShrink: 1 }}>소모 {n(burn.total)}{isToday ? ' (지금까지)' : ''} · 섭취 {n(intake.kcal)}</T>
+      <T v="num" style={{ fontSize: 15, color: intake.items ? (bal > 0 ? c.warn : c.ok) : c.muted }}>
+        {intake.items ? `${bal > 0 ? '+' : bal < 0 ? '−' : ''}${n(Math.abs(bal))}kcal` : '식사 기록 없음'}
+      </T>
+    </Row>
+  );
+}
+
+export function DayReview({ date }: { date: string }) {
+  const c = usePalette();
+  const check = useData((s) => s.checkins[date]);
+  const setCheckin = useData((s) => s.setCheckin);
+  const r = useDayReview(date);
+  const { isToday, a } = r;
 
   const [note, setNote] = useState(check?.note ?? '');
   const [prevKey, setPrevKey] = useState(date);

@@ -1,20 +1,16 @@
 import { router, useFocusEffect } from 'expo-router';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 
 import { Disclosure, Sheet } from '@/components/layout';
 import { LiveSpeedChart } from '@/components/live-speed';
 import { CardioPanel } from '@/components/cardio-panel';
+import { CardioWeek } from '@/components/cardio-week';
 import { RouteMap } from '@/components/route-map';
-import { TlNode } from '@/components/timeline';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, Chip, ConfirmButton, Meter, Pills, Row, Screen, Segmented, Stepper, T } from '@/components/ui';
 import { Radius, Space, usePalette } from '@/constants/theme';
-import { useNow } from '@/hooks/use-now';
-import { INTENSITY_NAME } from '@/lib/cardio';
-import { fmt } from '@/lib/dates';
-import { runTitle } from '@/lib/timeline';
 import { PHASE_NAME, buildPhases, phaseAt, planTotalS, type PhaseKind } from '@/lib/interval';
 import { paceStatus, targetBand } from '@/lib/live';
 import { body } from '@/lib/profile';
@@ -49,7 +45,6 @@ export default function RunScreen() {
   const update = useData((s) => s.updateSettings);
   const bodyT = useData((s) => s.bodyComps);
   const [now, setNow] = useState(() => Date.now());
-  const today = useNow();
   const [problem, setProblem] = useState<Extract<StartResult, { ok: false }> | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
@@ -81,10 +76,6 @@ export default function RunScreen() {
   }, [run.status, gpsWait, sprinting]);
 
   const runs = useMemo(() => live(runsT).sort((a, b) => b.startedAt - a.startedAt), [runsT]);
-  const weekKm = useMemo(() => {
-    const since = today.getTime() - 7 * 864e5;
-    return runs.filter((r) => r.startedAt >= since && ['run', 'walk', 'hike'].includes(r.kind ?? 'run')).reduce((a, r) => a + r.distanceM, 0) / 1000;
-  }, [runs, today]);
   const weight = body(settings.profile, live(bodyT))?.weight ?? 70;
 
   const secs = elapsedS(run, now);
@@ -191,7 +182,7 @@ export default function RunScreen() {
   const phaseColor = (k: PhaseKind) => (k === 'work' ? c.accent : k === 'rest' ? c.ok : c.rest);
 
   return (
-    <Screen title="유산소" sub={`최근 7일 ${weekKm.toFixed(1)}km`}>
+    <Screen title="유산소">
       {available === false ? <Banner text="GPS 기록은 설치한 앱에서만 쓸 수 있어요." /> : null}
 
       {saved?.sprint ? (
@@ -261,10 +252,13 @@ export default function RunScreen() {
             <Button label={busy ? '준비 중…' : interval ? '인터벌 시작' : sprint ? `${sprintM}m 스프린트 준비` : `${KIND_NAME[kind]} 시작`} kind="primary" disabled={busy} onPress={() => void start()} style={{ paddingVertical: 16 }} />
           )}
           {granted && count == null ? <T v="small" style={{ textAlign: 'center' }}>위치 허용 완료. 준비되면 시작을 누르세요.</T> : null}
-          <Row style={{ justifyContent: 'space-between' }}>
-            <T v="small">음성 안내 {opts.voice ? (interval ? '켜짐' : [opts.kmAlert ? '1km마다' : null, opts.everyMin ? `${opts.everyMin}분마다` : null].filter(Boolean).join(' · ') || '켜짐') : '꺼짐'}</T>
-            <Button label="옵션" kind="ghost" onPress={() => setVoiceSheet(true)} />
-          </Row>
+          {count == null && !gpsWait ? (
+            <Pressable accessibilityRole="button" onPress={() => setVoiceSheet(true)} hitSlop={8} style={{ alignSelf: 'center' }}>
+              <Text style={{ color: c.muted, fontSize: 13 }}>
+                옵션 · 음성 {opts.voice ? (interval ? '켜짐' : [opts.kmAlert ? '1km' : null, opts.everyMin ? `${opts.everyMin}분` : null].filter(Boolean).join('·') || '켜짐') : '꺼짐'}{opts.targetPaceS && !interval && !sprint ? ` · 목표 ${fmtRate(opts.targetPaceS, unit)}` : ''} ›
+              </Text>
+            </Pressable>
+          ) : null}
           {problem ? (
             <View style={{ gap: Space.sm }}>
               <Banner text={problem.message} />
@@ -414,20 +408,7 @@ export default function RunScreen() {
       ) : null}
 
 
-      <T v="label">기록</T>
-      {!runs.length ? <T v="muted" style={{ textAlign: 'center', paddingVertical: Space.lg }}>아직 기록이 없어요.</T> : null}
-      {runs.length ? (
-        <View>
-          {runs.slice(0, 10).map((r, i, arr) => (
-            <TlNode key={r.id} time={fmt(r.date).replace(/\s*\(.*\)/, '')} color={['run', 'ride', 'other'].includes(r.kind ?? 'run') ? c.warn : c.ok}
-              title={r.sprint ? `스프린트 ${r.sprint.targetM}m · ${fmtSprint(r.sprint.timeS)}` : r.kind === 'other' ? `${runTitle(r)} · ${Math.round(r.movingS / 60)}분` : `${runTitle(r)} · ${fmtKm(r.distanceM)}km`}
-              sub={r.sprint ? `최고 ${kmh(r.sprint.topV)}${best[r.sprint.targetM] === r.sprint.timeS ? ' · 최고 기록' : ''}`
-                : r.kind === 'other' ? [r.intensity ? INTENSITY_NAME[r.intensity] : null, `${r.kcal}kcal`, r.manual ? '직접 입력' : null].filter(Boolean).join(' · ')
-                : [fmtDuration(r.movingS), fmtRate(r.paceSecPerKm, runUnit(r.kind)), r.elev && r.elev.gainM >= 5 ? `↑${r.elev.gainM}m` : null].filter(Boolean).join(' · ')}
-              onPress={() => router.push({ pathname: '/activity/run', params: { id: r.id } })} last={i === arr.length - 1} />
-          ))}
-        </View>
-      ) : null}
+      {run.status === 'idle' && count == null && !gpsWait ? <CardioWeek runs={runs} best={best} unitOf={runUnit} /> : null}
     </Screen>
   );
 }
