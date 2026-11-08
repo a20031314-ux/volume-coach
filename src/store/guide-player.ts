@@ -33,8 +33,11 @@ export interface GuideState {
   items: RunItem[];
   spans: ItemSpan[];
   rhythm: boolean;
+  /** set this screen is about ("key:setNo") and the sets checked to fix after the workout */
+  ref: string;
+  flags: string[];
 }
-const IDLE: GuideState = { status: 'idle', sessionId: null, at: 0, length: 0, label: '', mode: undefined, until: 0, rep: 0, phase: '', phaseAt: 0, lastMove: '', item: 0, target: null, timed: false, items: [], spans: [], rhythm: true };
+const IDLE: GuideState = { status: 'idle', sessionId: null, at: 0, length: 0, label: '', mode: undefined, until: 0, rep: 0, phase: '', phaseAt: 0, lastMove: '', item: 0, target: null, timed: false, items: [], spans: [], rhythm: true, ref: '', flags: [] };
 export const useGuide = create<GuideState>(() => IDLE);
 
 let cues: RunCue[] = [];
@@ -78,6 +81,7 @@ function show(c: RunCue, patch: Partial<GuideState>) {
   if (c.item != null) patch.item = c.item;
   if (c.target !== undefined) patch.target = c.target;
   if (c.timed != null) patch.timed = c.timed;
+  if (c.ref != null) patch.ref = c.ref;
 }
 
 function tick() {
@@ -176,6 +180,23 @@ export function skipAhead() {
   const setEnd = mode === 'set' ? cues.find((c) => c.act?.k === 'set' && c.t > at && (!nextMark || c.t < nextMark.t)) : undefined;
   if (setEnd) seek(setEnd.t + 0.005);
   else seek(nextMark ? nextMark.t : cues.at(-1)?.t ?? at);
+}
+
+/** 체크: mark the set in progress (or the one just done, while resting) to fix after the workout */
+export function toggleFlag() {
+  const { ref, flags } = useGuide.getState();
+  if (!ref) return;
+  useGuide.setState({ flags: flags.includes(ref) ? flags.filter((f) => f !== ref) : [...flags, ref] });
+}
+
+/** 가이드 끝내기: stop here and go to 기록 확인 (what's recorded stays) */
+export function endRun() {
+  stopClock();
+  Speech.stop();
+  keepAwake(false);
+  cues = [];
+  next = 0;
+  useGuide.setState({ status: 'done' });
 }
 
 export function stopRun() {

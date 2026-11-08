@@ -81,6 +81,19 @@ export function undoSet(id: string, key: string) {
   });
 }
 
+/** 기록 확인: fix the weight / reps of recorded sets (by index) */
+export function editSets(id: string, key: string, patch: Record<number, { kg?: number | null; reps?: number | null }>) {
+  mutate(id, (s) => {
+    const ex = find(s, key);
+    if (!ex) return;
+    for (const [i, p] of Object.entries(patch)) {
+      const set = ex.sets[Number(i)];
+      if (set) Object.assign(set, p);
+    }
+    return [ex];
+  });
+}
+
 /** Finish an exercise. `count` is used in 운동별 mode. */
 export function completeExercise(id: string, key: string, count?: number) {
   mutate(id, (s, now) => {

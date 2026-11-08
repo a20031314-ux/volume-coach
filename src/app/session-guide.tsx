@@ -7,7 +7,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Button, Card, ConfirmButton, Meter, Pills, Row, Stepper, T } from '@/components/ui';
+import { Button, Card, ConfirmButton, Meter, NumField, Pills, Row, Stepper, T } from '@/components/ui';
 import { TimelineRow } from '@/components/guide-timeline';
 import { Space, usePalette } from '@/constants/theme';
 import { library } from '@/lib/exercises';
@@ -16,9 +16,9 @@ import {
 } from '@/lib/guide';
 import { fmtDuration } from '@/lib/run';
 import { lastPerformance, prefill, restSeconds } from '@/lib/session';
-import { canRestart, pauseRun, restartSet, resumeRun, skipAhead, startRun, stopRun, useGuide } from '@/store/guide-player';
+import { canRestart, endRun, pauseRun, restartSet, resumeRun, skipAhead, startRun, stopRun, toggleFlag, useGuide } from '@/store/guide-player';
 import { stopRest } from '@/store/rest-timer';
-import { completeExercise, completeSet, finishSession, makeActive } from '@/store/session-actions';
+import { completeExercise, completeSet, editSets, finishSession, makeActive, setDetail } from '@/store/session-actions';
 import { live, useData } from '@/store/store';
 
 const mmss = (s: number) => fmtDuration(Math.max(0, Math.round(s)));
@@ -75,10 +75,12 @@ function PlanView({ id }: { id: string }) {
       const it = byKey.get(a.key);
       if (!it) return;
       if (a.k === 'begin') makeActive(id, a.key);
-      else if (a.k === 'set' && setMode) {
+      else if (a.k === 'set') {
         completeSet(id, a.key, { kg: it.kg || null, reps: rhythmKind({ n: it.name }) === 'hold' ? null : it.reps, rpe: null });
-      } else if (a.k === 'done') completeExercise(id, a.key, setMode ? undefined : a.setNo);
+      } else if (a.k === 'done') completeExercise(id, a.key);
     };
+    // the guide records every set (weights are checked after), so the session keeps 세트별 records
+    if (!setMode) setDetail(id, 'set');
     void stopRest();
     startRun(id, run, { voice: g.voice, haptic: g.haptic }, act, { items: on, rhythm: g.reps });
   };
@@ -87,6 +89,7 @@ function PlanView({ id }: { id: string }) {
     <View style={{ flex: 1, backgroundColor: c.bg }}>
       <ScrollView contentContainerStyle={{ padding: Space.lg, gap: Space.md, paddingBottom: 120, maxWidth: 680, width: '100%', alignSelf: 'center' }}>
         <T v="muted">운동 전에 한 번 맞춰두면, 시작부터 끝까지 음성으로 이어서 안내해요. 진행 중엔 일시정지만 누르면 돼요.</T>
+        <T v="small">무게는 지난 기록으로 채워져 있어요. 비어 있어도 시작할 수 있고, 끝나면 기록 확인 화면에서 실제로 든 무게·횟수만 고치면 돼요.</T>
 
         {items.length ? (
           <Card style={{ gap: 0, paddingRight: Space.md }}>
@@ -168,17 +171,12 @@ function RunView({ id }: { id: string }) {
   const counting = st.mode === 'rest' || st.mode === 'move' || (st.timed && st.phase !== '준비' && st.phase !== '자세 잡기');
   const target = st.target;
 
-  if (st.status === 'done') {
-    return (
-      <View style={{ flex: 1, backgroundColor: c.bg, padding: Space.lg, gap: Space.md, paddingBottom: insets.bottom + Space.lg }}>
-        <T v="big">가이드 끝</T>
-        <T v="muted">세트는 설계한 무게·횟수로 기록됐어요. 다르게 했으면 운동 화면에서 고칠 수 있어요.</T>
-        <Button label="운동 끝내기" kind="primary" onPress={() => { finishSession(id); stopRun(); router.back(); }} style={{ paddingVertical: 14 }} />
-        <Button label="운동 화면으로 (더 하기)" onPress={() => { stopRun(); router.back(); }} />
-      </View>
-    );
-  }
+  if (st.status === 'done') return <Review id={id} />;
 
+  // 체크: the set in progress, or the one just done while resting
+  const flagged = st.flags.includes(st.ref);
+  const flagItem = st.items.find((x) => st.ref.startsWith(`${x.key}:`));
+  const flagWhat = flagItem ? `${flagItem.name} ${st.ref.split(':').pop()}세트` : '이 세트';
   // the moving dot in the current set
   const cur = st.items[st.item];
   const inSet = cur && st.mode === 'set' && st.phase !== '준비' && st.phase !== '자세 잡기';
@@ -216,25 +214,97 @@ function RunView({ id }: { id: string }) {
         {st.items.map((it, i) => (
           <TimelineRow key={it.key} it={it} rhythm={st.rhythm} span={st.spans[i]} last={i === st.items.length - 1} at={st.at}
             state={i < st.item || (i === st.item && (st.mode === 'move' || st.mode === 'end')) ? 'done' : i === st.item ? 'now' : 'next'}
-            live={i === st.item && st.mode !== 'move' ? { rep: repPos, line, counted: st.rep } : undefined} drop={dropOf(i)} />
+            live={i === st.item && st.mode !== 'move' ? { rep: repPos, line, counted: st.rep } : undefined} drop={dropOf(i)}
+            flagged={st.flags.filter((f) => f.startsWith(`${it.key}:`)).map((f) => Number(f.split(':').pop()))} />
         ))}
       </ScrollView>
 
       <View style={{ paddingHorizontal: Space.lg, paddingTop: Space.sm }}>
       {st.status === 'paused' ? (
         <View style={{ gap: Space.sm }}>
-          <T v="label" style={{ textAlign: 'center' }}>일시정지됨</T>
+          <T v="label" style={{ textAlign: 'center' }}>일시정지됨{st.flags.length ? ` · 체크 ${st.flags.length}개` : ''}</T>
           <Button label="▶ 이어서" kind="primary" onPress={resumeRun} style={{ paddingVertical: 16 }} />
           <Row style={{ flexWrap: 'nowrap' }}>
             <Button label="이 세트 처음부터" onPress={() => { restartSet(); resumeRun(); }} disabled={!canRestart(st.at)} style={{ flex: 1 }} />
             <Button label="다음으로 넘기기" onPress={() => { skipAhead(); resumeRun(); }} style={{ flex: 1 }} />
           </Row>
           <T v="small" style={{ textAlign: 'center' }}>넘기기: 세트 중이면 설계대로 기록하고 휴식으로, 휴식 중이면 다음 세트로</T>
-          <ConfirmButton label="가이드 끝내기" confirmLabel="끝내기 (지금까지 기록은 남음)" onConfirm={() => { stopRun(); router.back(); }} style={{ alignSelf: 'center' }} />
+          <Button label={flagged ? `✓ ${flagWhat} 체크됨 · 해제` : `☐ ${flagWhat} 체크 (끝나고 고치기)`} onPress={toggleFlag}
+            style={flagged ? { backgroundColor: c.warnSoft, borderColor: c.warn } : undefined} />
+          <ConfirmButton label="가이드 끝내기" confirmLabel="끝내고 기록 확인" onConfirm={endRun} style={{ alignSelf: 'center' }} />
         </View>
       ) : (
         <Button label="❚❚ 일시정지" kind="primary" onPress={pauseRun} style={{ paddingVertical: 22 }} accessibilityLabel="일시정지" />
       )}
+      </View>
+    </View>
+  );
+}
+
+/* ---------- 기록 확인 ---------- */
+
+/** After the guide: every guided set as planned; fix only what was different (체크한 세트가 위에). */
+function Review({ id }: { id: string }) {
+  const c = usePalette();
+  const insets = useSafeAreaInsets();
+  const st = useGuide();
+  const session = useData((s) => s.sessions[id]);
+  const [edits, setEdits] = useState<Record<string, Record<number, { kg?: number | null; reps?: number | null }>>>({});
+  const changed = Object.values(edits).some((e) => Object.keys(e).length);
+
+  const rows = st.items.map((it) => {
+    const ex = session?.exercises.find((e) => e.key === it.key);
+    const sets = (ex?.sets ?? []).map((set, i) => ({ set, i, no: i + 1 })).filter((x) => x.no >= it.first);
+    return { it, sets };
+  }).filter((r) => r.sets.length);
+  const flaggedFirst = [...rows].sort((a, b) => Number(b.sets.some((x) => st.flags.includes(`${b.it.key}:${x.no}`))) - Number(a.sets.some((x) => st.flags.includes(`${a.it.key}:${x.no}`))));
+
+  const put = (key: string, i: number, p: { kg?: number | null; reps?: number | null }) =>
+    setEdits((e) => ({ ...e, [key]: { ...(e[key] ?? {}), [i]: { ...(e[key]?.[i] ?? {}), ...p } } }));
+  const apply = () => { for (const [key, p] of Object.entries(edits)) if (Object.keys(p).length) editSets(id, key, p); };
+  const finish = (end: boolean) => {
+    apply();
+    if (end) finishSession(id);
+    stopRun();
+    router.back();
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+      <ScrollView contentContainerStyle={{ padding: Space.lg, gap: Space.md, paddingBottom: 170, maxWidth: 680, width: '100%', alignSelf: 'center' }}>
+        <T v="big">기록 확인</T>
+        <T v="muted">설계한 무게·횟수로 기록돼 있어요. 실제로 다르게 한 칸만 고치세요.{st.flags.length ? ` 운동 중 체크한 세트 ${st.flags.length}개는 노란색이에요.` : ''}</T>
+        {flaggedFirst.map(({ it, sets }) => {
+          const hold = rhythmKind({ n: it.name }) === 'hold';
+          return (
+            <Card key={it.key} style={{ gap: 6 }}>
+              <T style={{ fontWeight: '700' }}>{it.name}</T>
+              {sets.map(({ set, i, no }) => {
+                const flag = st.flags.includes(`${it.key}:${no}`);
+                const e = edits[it.key]?.[i] ?? {};
+                const kg = 'kg' in e ? e.kg : set.kg;
+                const reps = 'reps' in e ? e.reps : set.reps;
+                return (
+                  <Row key={i} gap={Space.sm} style={{ flexWrap: 'nowrap', alignItems: 'flex-end', padding: flag ? 6 : 0, borderRadius: 8, backgroundColor: flag ? c.warnSoft : 'transparent' }}>
+                    <View style={{ width: 52, paddingBottom: 12 }}>
+                      <T style={{ fontWeight: '700' }}>{no}세트</T>
+                      {flag ? <T v="small" style={{ color: c.warn, fontSize: 11 }}>체크함</T> : null}
+                    </View>
+                    {hold ? <T v="muted" style={{ flex: 1, paddingBottom: 12 }}>{it.hold}초 버티기</T> : (<>
+                      <NumField label="kg" value={kg ?? null} decimal placeholder="무게" onCommit={(v) => put(it.key, i, { kg: v })} style={{ flex: 1 }} />
+                      <NumField label="회" value={reps ?? null} placeholder="횟수" onCommit={(v) => put(it.key, i, { reps: v })} style={{ flex: 1 }} />
+                    </>)}
+                  </Row>
+                );
+              })}
+            </Card>
+          );
+        })}
+        {!rows.length ? <Card><T>가이드로 기록된 세트가 없어요</T></Card> : null}
+      </ScrollView>
+      <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: Space.md, paddingBottom: insets.bottom + Space.md, backgroundColor: c.surface, borderTopWidth: 1, borderColor: c.line, gap: Space.sm }}>
+        <Button label={changed ? '고친 기록 저장 · 운동 끝내기' : '모두 맞아요 · 운동 끝내기'} kind="primary" onPress={() => finish(true)} style={{ paddingVertical: 14 }} />
+        <Button label={changed ? '저장하고 운동 화면으로 (더 하기)' : '운동 화면으로 (더 하기)'} onPress={() => finish(false)} />
       </View>
     </View>
   );

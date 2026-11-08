@@ -224,6 +224,8 @@ export interface RunCue extends Cue {
   target?: number | null;
   /** a timed set (hold): show the time left */
   timed?: boolean;
+  /** "key:setNo" of the set this "준비" starts — what 체크 marks (stays until the next set) */
+  ref?: string;
 }
 
 const amount = (it: RunItem) => (rhythmKind({ n: it.name }) === 'hold' ? `${it.hold}초` : `${it.kg ? `${fmtKg(it.kg)}킬로 ` : ''}${it.reps}회`);
@@ -246,7 +248,7 @@ export function buildRun(items: RunItem[], o: RunOpts): { cues: RunCue[]; length
         setNo, reps: it.reps, tempo: it.tempo, ex: { n: it.name, p: it.p }, countdown: o.countdown, rhythm: o.rhythm, setup: it.setup,
         intro: it.setup >= 4 ? `${intro}, 자세 잡으세요` : intro, hold: rhythmKind({ n: it.name }) === 'hold' ? it.hold : undefined,
       });
-      cues.push({ t: T, mark: true, item: idx, target: rhythmKind({ n: it.name }) === 'hold' ? null : it.reps, timed: rhythmKind({ n: it.name }) === 'hold', mode: 'set', label: `${it.name} · ${setNo}/${last}세트`, until: T + length, rep: 0, phase: '준비', act: k === 0 ? { k: 'begin', key: it.key, setNo } : undefined });
+      cues.push({ t: T, mark: true, ref: `${it.key}:${setNo}`, item: idx, target: rhythmKind({ n: it.name }) === 'hold' ? null : it.reps, timed: rhythmKind({ n: it.name }) === 'hold', mode: 'set', label: `${it.name} · ${setNo}/${last}세트`, until: T + length, rep: 0, phase: '준비', act: k === 0 ? { k: 'begin', key: it.key, setNo } : undefined });
       for (const c of sc) cues.push({ ...c, t: r1(T + c.t), end: undefined, ...(c.end ? { act: { k: 'set' as const, key: it.key, setNo } } : {}) });
       T = r1(T + length);
       const next = k < it.sets - 1 ? { item: it, setNo: setNo + 1 } : null;

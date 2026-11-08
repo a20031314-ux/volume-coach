@@ -19,7 +19,7 @@ const pct = (x: number) => `${Math.max(0, Math.min(100, x * 100))}%` as const;
  * 가로선 위의 점: 이 종목의 세트들이 시간 순서대로 (점 = 세트 시작, 굵은 선 = 세트, 가는 선 = 휴식).
  * 진행 중엔 지금 위치 점이 시간에 따라 오른쪽으로 움직인다.
  */
-export function SetLine({ span, at, big, first = 1 }: { span: ItemSpan; at?: number; big?: boolean; first?: number }) {
+export function SetLine({ span, at, big, first = 1, flagged = [] }: { span: ItemSpan; at?: number; big?: boolean; first?: number; flagged?: number[] }) {
   const c = usePalette();
   const len = Math.max(1, span.end - span.start);
   const x = (t: number) => (t - span.start) / len;
@@ -36,12 +36,13 @@ export function SetLine({ span, at, big, first = 1 }: { span: ItemSpan; at?: num
       {span.sets.map((st, i) => {
         const done = at != null && at >= st.e;
         const now = at != null && at >= st.s && at < st.e;
+        const flag = flagged.includes(first + i);
         return (
           <View key={i}>
             <View style={{ position: 'absolute', left: pct(x(st.go)), width: pct(x(st.e) - x(st.go)), top: -2, height: 4, borderRadius: 2, backgroundColor: done ? c.accent : c.band }} />
             <View style={{ position: 'absolute', left: pct(x(st.s)), top: -(now ? q + 6 : q) / 2, marginLeft: -(now ? q + 6 : q) / 2, width: now ? q + 6 : q, height: now ? q + 6 : q, borderRadius: 5,
-              backgroundColor: done || now ? c.accent : c.surface, borderWidth: now ? 3 : 1.5, borderColor: now ? c.ink : c.accent, alignItems: 'center', justifyContent: 'center' }}>
-              <T style={{ fontSize: now ? 12 : big ? 10 : 8, lineHeight: now ? 14 : big ? 12 : 10, fontWeight: '800', color: done || now ? c.accentInk : c.accent }}>{first + i}</T>
+              backgroundColor: flag ? c.warn : done || now ? c.accent : c.surface, borderWidth: now ? 3 : 1.5, borderColor: now ? c.ink : flag ? c.warn : c.accent, alignItems: 'center', justifyContent: 'center' }}>
+              <T style={{ fontSize: now ? 12 : big ? 10 : 8, lineHeight: now ? 14 : big ? 12 : 10, fontWeight: '800', color: flag || done || now ? c.accentInk : c.accent }}>{first + i}</T>
             </View>
           </View>
         );
@@ -78,7 +79,7 @@ export function RepLine({ count, progress, hold, counted }: { count: number; pro
 
 export type RowState = 'plan' | 'done' | 'now' | 'next' | 'off';
 
-export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, children, at, live, drop = 0 }: {
+export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, children, at, live, drop = 0, flagged }: {
   it: RunItem; span: ItemSpan | null; state: RowState; rhythm: boolean; last?: boolean;
   onPress?: () => void; onToggle?: () => void; children?: ReactNode;
   /** running: timeline seconds now */
@@ -87,6 +88,8 @@ export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, 
   live?: { rep: number | null; line: string; counted?: number };
   /** running: how far the move to the next exercise has come down the rail (0–1) */
   drop?: number;
+  /** set numbers checked to fix later (노란 네모) */
+  flagged?: number[];
 }) {
   const c = usePalette();
   const kind = rhythmKind({ n: it.name });
@@ -121,7 +124,7 @@ export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, 
       {/* 가로 템포 */}
       <Pressable accessibilityRole={onPress ? 'button' : undefined} onPress={onPress} disabled={!onPress}
         style={{ flex: 1, paddingLeft: 6, paddingBottom: 14, gap: 4, opacity: dim ? 0.5 : 1 }}>
-        {span && state !== 'off' ? <SetLine span={span} at={at} big={state === 'now'} first={it.first} /> : <View style={{ height: 16, justifyContent: 'center' }}><View style={{ height: 2, backgroundColor: c.line }} /></View>}
+        {span && state !== 'off' ? <SetLine span={span} at={at} big={state === 'now'} first={it.first} flagged={flagged} /> : <View style={{ height: 16, justifyContent: 'center' }}><View style={{ height: 2, backgroundColor: c.line }} /></View>}
         {live && live.rep != null ? <RepLine count={kind === 'hold' ? 1 : it.reps} progress={live.rep} hold={kind === 'hold'} counted={live.counted} /> : null}
         <T v="small" style={{ fontSize: 11 }}>
           {live?.line ?? `${span && state !== 'off' ? `${fmtDuration(Math.round(span.start))}부터 · ` : ''}휴식 ${it.rest}초 · 자세 ${it.setup}초${kind === 'rhythm' && rhythm ? ` · ${it.tempo.replace(/-0$/, '')}` : ''}`}
