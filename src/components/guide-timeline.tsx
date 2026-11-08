@@ -1,6 +1,6 @@
 /**
- * 가이드 타임라인: 왼쪽 운동명 · 가운데 세로 타임라인(순서·시작 시각) · 오른쪽 가로 템포(한 번 반복의 모양).
- * 설계 화면에선 탭해서 고치고, 진행 중엔 지금 종목이 커지고 템포 블록이 실시간으로 채워진다.
+ * 가이드 타임라인: 왼쪽 운동명 · 가운데 세로 타임라인(순서·시작 시각) · 오른쪽 가로 시간선.
+ * 오른쪽은 가로선 위 점(세트)들, 진행 중엔 점이 시간에 따라 오른쪽으로 움직이고 지금 세트는 반복 점 위를 템포 속도로 간다.
  */
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
@@ -8,54 +8,76 @@ import { Pressable, View } from 'react-native';
 import { T } from '@/components/ui';
 import { usePalette } from '@/constants/theme';
 import { fmtDuration } from '@/lib/run';
-import { rhythmKind, tempoBlocks, type RunItem } from '@/lib/guide';
+import { rhythmKind, type ItemSpan, type RunItem } from '@/lib/guide';
 
 const NAME_W = 104;
 const RAIL_W = 26;
 
-/** one rep: ▭내리고 3 ▭밀어 1 — widths by seconds; `fill` = 0–1 of the active block */
-export function TempoStrip({ it, rhythm, active, fill = 0, big }: { it: RunItem; rhythm: boolean; active?: string | null; fill?: number; big?: boolean }) {
+const pct = (x: number) => `${Math.max(0, Math.min(100, x * 100))}%` as const;
+
+/**
+ * 가로선 위의 점: 이 종목의 세트들이 시간 순서대로 (점 = 세트 시작, 굵은 선 = 세트, 가는 선 = 휴식).
+ * 진행 중엔 지금 위치 점이 시간에 따라 오른쪽으로 움직인다.
+ */
+export function SetLine({ span, at, big }: { span: ItemSpan; at?: number; big?: boolean }) {
   const c = usePalette();
-  const kind = rhythmKind({ n: it.name });
-  const h = big ? 44 : 30;
-  if (kind === 'hold' || kind === 'explosive' || !rhythm) {
-    const word = kind === 'hold' ? `${it.hold}초 버티기` : kind === 'explosive' ? '빠르게 · 3초마다 하나' : '박자 안내 없음';
-    return (
-      <View style={{ height: h, borderRadius: 6, backgroundColor: c.accentSoft, justifyContent: 'center', paddingHorizontal: 8, overflow: 'hidden' }}>
-        {big && kind === 'hold' ? <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, fill * 100)}%`, backgroundColor: c.band }} /> : null}
-        <T v="small" style={{ color: c.accent, fontWeight: '700' }}>{word}</T>
-      </View>
-    );
-  }
-  const blocks = tempoBlocks(it.tempo, it);
+  const len = Math.max(1, span.end - span.start);
+  const x = (t: number) => (t - span.start) / len;
+  const h = big ? 22 : 16;
+  const d = big ? 12 : 9;
+  const live = at != null && at >= span.start && at <= span.end + 0.5;
   return (
-    <View style={{ flexDirection: 'row', height: h, gap: 2 }}>
-      {blocks.map((b, i) => {
-        const on = active === b.k;
-        const move = b.k === 'down' || b.k === 'up';
-        const bg = b.k === 'up' ? c.accent : b.k === 'down' ? c.band : c.restSoft;
-        const ink = b.k === 'up' ? c.accentInk : b.k === 'down' ? c.accent : c.muted;
+    <View style={{ height: h, justifyContent: 'center', marginHorizontal: d / 2 }}>
+      <View style={{ position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: c.line }} />
+      {live ? <View style={{ position: 'absolute', left: 0, width: pct(x(at)), height: 2, backgroundColor: c.accent }} /> : null}
+      {span.sets.map((st, i) => {
+        const done = at != null && at >= st.e;
         return (
-          <View key={i} style={{ flex: Math.max(b.s, 1.6), borderRadius: 6, backgroundColor: bg, overflow: 'hidden', justifyContent: 'center', alignItems: 'center',
-            borderWidth: on ? 2 : 0, borderColor: c.ink, opacity: active && !on ? 0.45 : 1 }}>
-            {on ? <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(100, fill * 100)}%`, backgroundColor: c.ink, opacity: 0.18 }} /> : null}
-            <T numberOfLines={1} style={{ fontSize: big ? 15 : 11, fontWeight: move ? '700' : '500', color: ink }}>
-              {b.word} {b.s === 0.8 ? 'X' : b.s}
-            </T>
+          <View key={i}>
+            <View style={{ position: 'absolute', left: pct(x(st.go)), width: pct(x(st.e) - x(st.go)), top: -2, height: 4, borderRadius: 2, backgroundColor: done ? c.accent : c.band }} />
+            <View style={{ position: 'absolute', left: pct(x(st.s)), top: -d / 2, marginLeft: -d / 2, width: d, height: d, borderRadius: d / 2,
+              backgroundColor: done ? c.accent : c.surface, borderWidth: 2, borderColor: c.accent }} />
           </View>
         );
       })}
+      {live ? (
+        <View style={{ position: 'absolute', left: pct(x(at)), marginLeft: -(d + 4) / 2, width: d + 4, height: d + 4, borderRadius: (d + 4) / 2,
+          backgroundColor: c.ink, borderWidth: 2, borderColor: c.surface }} />
+      ) : null}
+    </View>
+  );
+}
+
+/** 지금 세트: 반복마다 점, 움직이는 점이 템포 속도로 다음 점까지 간다 */
+export function RepLine({ count, progress, label }: { count: number; progress: number; label?: string }) {
+  const c = usePalette();
+  const n = Math.max(1, Math.min(count, 30));
+  return (
+    <View style={{ gap: 2 }}>
+      <View style={{ height: 26, justifyContent: 'center', marginHorizontal: 8 }}>
+        <View style={{ position: 'absolute', left: 0, right: 0, height: 3, borderRadius: 2, backgroundColor: c.restSoft }} />
+        <View style={{ position: 'absolute', left: 0, width: pct(progress), height: 3, borderRadius: 2, backgroundColor: c.accent }} />
+        {Array.from({ length: n }, (_, i) => {
+          const at = (i + 1) / n;
+          const hit = progress >= at - 1e-3;
+          return <View key={i} style={{ position: 'absolute', left: pct(at), marginLeft: -4, top: 9, width: 8, height: 8, borderRadius: 4, backgroundColor: hit ? c.accent : c.surface, borderWidth: 2, borderColor: hit ? c.accent : c.line }} />;
+        })}
+        <View style={{ position: 'absolute', left: pct(progress), marginLeft: -9, width: 18, height: 18, borderRadius: 9, backgroundColor: c.accent, borderWidth: 3, borderColor: c.surface }} />
+      </View>
+      {label ? <T v="small" style={{ fontSize: 11 }}>{label}</T> : null}
     </View>
   );
 }
 
 export type RowState = 'plan' | 'done' | 'now' | 'next' | 'off';
 
-export function TimelineRow({ it, start, state, rhythm, last, onPress, onToggle, children, live }: {
-  it: RunItem; start: number | null; state: RowState; rhythm: boolean; last?: boolean;
+export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, children, at, live }: {
+  it: RunItem; span: ItemSpan | null; state: RowState; rhythm: boolean; last?: boolean;
   onPress?: () => void; onToggle?: () => void; children?: ReactNode;
-  /** while running: the active block and how far into it */
-  live?: { block: string | null; fill: number; line: string };
+  /** running: timeline seconds now */
+  at?: number;
+  /** running, this row: the moving dot in the set (null = not in a set) and the caption */
+  live?: { rep: number | null; line: string };
 }) {
   const c = usePalette();
   const kind = rhythmKind({ n: it.name });
@@ -81,9 +103,10 @@ export function TimelineRow({ it, start, state, rhythm, last, onPress, onToggle,
       {/* 가로 템포 */}
       <Pressable accessibilityRole={onPress ? 'button' : undefined} onPress={onPress} disabled={!onPress}
         style={{ flex: 1, paddingLeft: 6, paddingBottom: 14, gap: 4, opacity: dim ? 0.5 : 1 }}>
-        <TempoStrip it={it} rhythm={rhythm} big={state === 'now'} active={live?.block} fill={live?.fill} />
+        {span && state !== 'off' ? <SetLine span={span} at={at} big={state === 'now'} /> : <View style={{ height: 16, justifyContent: 'center' }}><View style={{ height: 2, backgroundColor: c.line }} /></View>}
+        {live && live.rep != null ? <RepLine count={kind === 'hold' ? 1 : it.reps} progress={live.rep} /> : null}
         <T v="small" style={{ fontSize: 11 }}>
-          {live?.line ?? `${start != null ? `${fmtDuration(Math.round(start))} 시작 · ` : ''}휴식 ${it.rest}초 · 자세 ${it.setup}초`}
+          {live?.line ?? `${span && state !== 'off' ? `${fmtDuration(Math.round(span.start))}부터 · ` : ''}휴식 ${it.rest}초 · 자세 ${it.setup}초${kind === 'rhythm' && rhythm ? ` · ${it.tempo.replace(/-0$/, '')}` : ''}`}
         </T>
         {children}
       </Pressable>

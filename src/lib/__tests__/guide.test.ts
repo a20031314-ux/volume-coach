@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { LIBRARY } from '../exercises';
-import { appliesTo, buildRun, countWord, DEFAULT_GUIDE, describeTempo, parseTempo, restCues, rhythmKind, setCues, setupFor, tempoFor, type RunItem } from '../guide';
+import { appliesTo, buildRun, countWord, DEFAULT_GUIDE, describeTempo, parseTempo, restCues, rhythmKind, setCues, setupFor, tempoFor, runSpans, repProgress, type RunItem } from '../guide';
 
 const ex = (n: string) => LIBRARY.find((e) => e.n === n)!;
 
@@ -80,6 +80,20 @@ describe('가이드 모드', () => {
     expect(cues.some((c) => c.say?.includes('랫풀다운'))).toBe(false);
     expect(length).toBeGreaterThan(start3 + 30);
     expect(cues.every((c, i) => i === 0 || c.t >= cues[i - 1].t)).toBe(true);
+  });
+  it('spans per exercise and the moving dot follows the tempo', () => {
+    const it0: RunItem = { key: 'b', name: '바벨 벤치프레스', p: 'hpush', sets: 2, first: 1, reps: 2, hold: 30, kg: 60, tempo: '3-0-1-0', rest: 60, setup: 10, on: true };
+    const { cues } = buildRun([it0, { ...it0, key: 'r', name: '랫풀다운', p: 'vpull', sets: 1 }], { countdown: true, rhythm: true, restCues: true, move: 60 });
+    const sp = runSpans(cues, 2);
+    expect(sp[0].sets).toHaveLength(2);
+    expect(sp[0].sets[1].go - sp[0].sets[0].e).toBeCloseTo(60, 0);
+    expect(sp[1].start).toBeGreaterThan(sp[0].end);
+    // push: halfway through the 1st rep's 3s 내리고 → about 1.5/4.3 of one of two reps
+    expect(repProgress({ it: it0, rep: 0, phase: '내리고', lastMove: '내리고', since: 1.5 })).toBeCloseTo(1.5 / 4.3 / 2, 2);
+    expect(repProgress({ it: it0, rep: 1, phase: '내리고', lastMove: '내리고', since: 0 })).toBeCloseTo(0.5, 2);
+    // pull: counted after 당겨, so 내리고 belongs to the rep just counted
+    const pull = { ...it0, p: 'vpull' as const };
+    expect(repProgress({ it: pull, rep: 1, phase: '내리고', lastMove: '내리고', since: 0 })).toBeCloseTo(1 / 4.3 / 2, 2);
   });
 });
 

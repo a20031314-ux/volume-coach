@@ -8,7 +8,7 @@ import * as Speech from 'expo-speech';
 import { Platform, Vibration } from 'react-native';
 import { create } from 'zustand';
 
-import type { Cue, RunAct, RunCue, RunItem } from '@/lib/guide';
+import { runSpans, type Cue, type ItemSpan, type RunAct, type RunCue, type RunItem } from '@/lib/guide';
 
 export interface Output { voice: boolean; haptic: boolean }
 
@@ -31,10 +31,10 @@ export interface GuideState {
   timed: boolean;
   /** the planned items (only the ones in the run) and when each starts */
   items: RunItem[];
-  starts: number[];
+  spans: ItemSpan[];
   rhythm: boolean;
 }
-const IDLE: GuideState = { status: 'idle', sessionId: null, at: 0, length: 0, label: '', mode: undefined, until: 0, rep: 0, phase: '', phaseAt: 0, lastMove: '', item: 0, target: null, timed: false, items: [], starts: [], rhythm: true };
+const IDLE: GuideState = { status: 'idle', sessionId: null, at: 0, length: 0, label: '', mode: undefined, until: 0, rep: 0, phase: '', phaseAt: 0, lastMove: '', item: 0, target: null, timed: false, items: [], spans: [], rhythm: true };
 export const useGuide = create<GuideState>(() => IDLE);
 
 let cues: RunCue[] = [];
@@ -118,8 +118,8 @@ export function startRun(sessionId: string, timeline: { cues: RunCue[]; length: 
   next = 0;
   out = o;
   onAct = act;
-  const starts = meta.items.map((_, i) => timeline.cues.find((c) => c.mark && c.item === i)?.t ?? 0);
-  useGuide.setState({ ...IDLE, status: 'running', sessionId, length: timeline.length, items: meta.items, starts, rhythm: meta.rhythm });
+  const spans = runSpans(timeline.cues, meta.items.length);
+  useGuide.setState({ ...IDLE, status: 'running', sessionId, length: timeline.length, items: meta.items, spans, rhythm: meta.rhythm });
   keepAwake(true);
   startClock(0);
 }

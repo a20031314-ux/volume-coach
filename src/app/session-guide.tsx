@@ -12,7 +12,7 @@ import { TimelineRow } from '@/components/guide-timeline';
 import { Space, usePalette } from '@/constants/theme';
 import { library } from '@/lib/exercises';
 import {
-  blockOf, buildRun, DEFAULT_GUIDE, describeTempo, tempoBlocks, GOAL_TEMPO, rhythmKind, setupFor, tempoFor, TEMPO_CHOICES, type RunAct, type RunItem,
+  buildRun, DEFAULT_GUIDE, describeTempo, repProgress, runSpans, GOAL_TEMPO, rhythmKind, setupFor, tempoFor, TEMPO_CHOICES, type RunAct, type RunItem,
 } from '@/lib/guide';
 import { fmtDuration } from '@/lib/run';
 import { lastPerformance, prefill, restSeconds } from '@/lib/session';
@@ -65,7 +65,7 @@ function PlanView({ id }: { id: string }) {
   const opts = { countdown: g.countdown, rhythm: g.reps, restCues: g.rest, move };
   const run = buildRun(items, opts);
   const on = items.filter((i) => i.on && i.sets > 0);
-  const starts = on.map((_, i) => run.cues.find((c) => c.mark && c.item === i)?.t ?? 0);
+  const spans = runSpans(run.cues, on.length);
   const edit = (key: string, patch: Partial<RunItem>) => setItems((l) => l.map((i) => (i.key === key ? { ...i, ...patch } : i)));
 
   const start = () => {
@@ -93,7 +93,7 @@ function PlanView({ id }: { id: string }) {
             <Row style={{ flexWrap: 'nowrap', marginBottom: 8 }}>
               <T v="small" style={{ width: 104, fontSize: 11 }}>운동 (탭: 빼기)</T>
               <T v="small" style={{ width: 26, fontSize: 11, textAlign: 'center' }}>순서</T>
-              <T v="small" style={{ flex: 1, fontSize: 11, paddingLeft: 6 }}>한 번 반복의 템포 (초) · 탭해서 고치기</T>
+              <T v="small" style={{ flex: 1, fontSize: 11, paddingLeft: 6 }}>시간 → (점: 세트, 탭해서 고치기)</T>
             </Row>
             {items.map((it, i) => {
               const kind = rhythmKind({ n: it.name });
@@ -102,7 +102,7 @@ function PlanView({ id }: { id: string }) {
               return (
                 <View key={it.key}>
                   <TimelineRow it={it} rhythm={g.reps} state={it.on ? (expanded ? 'now' : 'plan') : 'off'} last={i === items.length - 1}
-                    start={idx >= 0 ? starts[idx] : null}
+                    span={idx >= 0 ? spans[idx] : null}
                     onToggle={() => edit(it.key, { on: !it.on })} onPress={() => setOpen(expanded ? null : it.key)} />
                   {expanded ? (
                     <View style={{ gap: Space.sm, marginLeft: 0, marginBottom: Space.md, padding: Space.md, borderRadius: 10, backgroundColor: c.bg }}>
@@ -181,11 +181,10 @@ function RunView({ id }: { id: string }) {
     );
   }
 
-  // live tempo: which block of the rep we're in and how far
+  // the moving dot in the current set
   const cur = st.items[st.item];
-  const block = cur && st.mode === 'set' ? blockOf(st.phase, st.lastMove) : null;
-  const blockS = cur && block ? tempoBlocks(cur.tempo, cur).find((b) => b.k === block)?.s ?? 1 : 1;
-  const fill = st.timed && cur && st.mode === 'set' && st.phase === '시작' ? (st.at - st.phaseAt) / cur.hold : block ? (st.at - st.phaseAt) / blockS : 0;
+  const inSet = cur && st.mode === 'set' && st.phase !== '준비' && st.phase !== '자세 잡기';
+  const repPos = inSet ? repProgress({ it: cur, rep: st.rep, phase: st.phase, lastMove: st.lastMove, since: st.at - st.phaseAt }) : null;
   const line = st.mode === 'set' ? `${st.label.split(' · ')[1] ?? ''}${target ? ` · ${st.rep}/${target}회` : ''}`
     : st.mode === 'rest' ? `휴식 ${mmss(left)} · ${st.label.split('다음 ')[1] ?? ''} 준비` : st.mode === 'move' ? `이동 ${mmss(left)}` : '';
 
@@ -209,9 +208,9 @@ function RunView({ id }: { id: string }) {
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: Space.lg, paddingTop: Space.sm }}>
         {st.items.map((it, i) => (
-          <TimelineRow key={it.key} it={it} rhythm={st.rhythm} start={st.starts[i]} last={i === st.items.length - 1}
+          <TimelineRow key={it.key} it={it} rhythm={st.rhythm} span={st.spans[i]} last={i === st.items.length - 1} at={st.at}
             state={i < st.item ? 'done' : i === st.item ? 'now' : 'next'}
-            live={i === st.item ? { block, fill, line } : undefined} />
+            live={i === st.item ? { rep: repPos, line } : undefined} />
         ))}
       </ScrollView>
 

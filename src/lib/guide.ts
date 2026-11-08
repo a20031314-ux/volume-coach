@@ -302,3 +302,41 @@ export function blockOf(phase: string, lastMove: string): TempoBlock['k'] | null
   if (phase === '멈춰') return lastMove === '내리고' ? 'bottom' : 'top';
   return null;
 }
+
+/** per item: when each set starts ("준비") and ends (recorded) — for the 가로 타임라인 */
+export interface ItemSpan { start: number; end: number; sets: { s: number; go: number; e: number }[] }
+export function runSpans(cues: RunCue[], count: number): ItemSpan[] {
+  const spans: ItemSpan[] = Array.from({ length: count }, () => ({ start: 0, end: 0, sets: [] }));
+  let cur = -1;
+  let open: { s: number; go: number; e: number } | null = null;
+  for (const c of cues) {
+    if (c.mark && c.item != null) {
+      cur = c.item;
+      open = { s: c.t, go: c.t, e: c.t };
+      spans[cur].sets.push(open);
+    } else if (open && c.say === '시작' && open.go === open.s) open.go = c.t;
+    else if (open && c.act?.k === 'set') { open.e = c.t; open = null; }
+  }
+  for (const sp of spans) if (sp.sets.length) { sp.start = sp.sets[0].s; sp.end = sp.sets.at(-1)!.e; }
+  return spans;
+}
+
+/**
+ * Where the moving dot is in the current set, 0–1: reps done + how far into this rep (by tempo).
+ * Counts land at the end of the lifting half, so blocks after it belong to the rep just counted.
+ */
+export function repProgress(o: { it: Pick<RunItem, 'tempo' | 'p' | 'reps' | 'hold' | 'name'>; rep: number; phase: string; lastMove: string; since: number }): number {
+  const kind = rhythmKind({ n: o.it.name });
+  if (kind === 'hold') return o.phase === '시작' ? Math.min(1, o.since / o.it.hold) : 0;
+  if (kind === 'explosive') return Math.min(1, (o.rep + Math.min(1, o.since / 3)) / o.it.reps);
+  const blocks = tempoBlocks(o.it.tempo, o.it);
+  const k = blockOf(o.phase, o.lastMove);
+  if (!k) return o.phase === '끝' ? 1 : Math.min(1, o.rep / o.it.reps);
+  const cycle = blocks.reduce((a, b) => a + b.s, 0) + 0.3;
+  const i = blocks.findIndex((b) => b.k === k);
+  if (i < 0) return Math.min(1, o.rep / o.it.reps);
+  const upAt = blocks.findIndex((b) => b.k === 'up');
+  const done = o.rep - (i > upAt ? 1 : 0);
+  const into = blocks.slice(0, i).reduce((a, b) => a + b.s, 0) + Math.min(o.since, blocks[i].s);
+  return Math.max(0, Math.min(1, (done + into / cycle) / o.it.reps));
+}
