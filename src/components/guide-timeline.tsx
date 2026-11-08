@@ -71,18 +71,22 @@ export function RepLine({ count, progress, label }: { count: number; progress: n
 
 export type RowState = 'plan' | 'done' | 'now' | 'next' | 'off';
 
-export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, children, at, live }: {
+export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, children, at, live, drop = 0 }: {
   it: RunItem; span: ItemSpan | null; state: RowState; rhythm: boolean; last?: boolean;
   onPress?: () => void; onToggle?: () => void; children?: ReactNode;
   /** running: timeline seconds now */
   at?: number;
   /** running, this row: the moving dot in the set (null = not in a set) and the caption */
   live?: { rep: number | null; line: string };
+  /** running: how far the move to the next exercise has come down the rail (0–1) */
+  drop?: number;
 }) {
   const c = usePalette();
   const kind = rhythmKind({ n: it.name });
   const dim = state === 'off' || state === 'done';
-  const dot = state === 'now' ? c.accent : state === 'done' ? c.accent : state === 'off' ? c.line : c.surface;
+  // 세로(종목 → 다음 종목)는 초록, 가로(세트·반복)는 파랑
+  const dot = state === 'now' ? c.accent : state === 'done' ? c.ok : state === 'off' ? c.line : c.surface;
+  const ring = state === 'off' ? c.line : state === 'done' ? c.ok : state === 'next' ? c.line : c.accent;
   const amount = kind === 'hold' ? `${it.sets}×${it.hold}초` : `${it.sets}×${it.reps}${it.kg ? ` · ${it.kg}kg` : ''}`;
   return (
     <View style={{ flexDirection: 'row' }}>
@@ -95,10 +99,17 @@ export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, 
       </Pressable>
       {/* 세로 타임라인 */}
       <View style={{ width: RAIL_W, alignItems: 'center' }}>
-        <View style={{ width: state === 'now' ? 16 : 12, height: state === 'now' ? 16 : 12, borderRadius: 8, marginTop: 4, backgroundColor: dot, borderWidth: 2, borderColor: state === 'off' ? c.line : c.accent }}>
-          {state === 'done' ? <T style={{ color: c.accentInk, fontSize: 8, lineHeight: 9, textAlign: 'center', fontWeight: '800' }}>✓</T> : null}
+        <View style={{ width: state === 'now' ? 18 : 14, height: state === 'now' ? 18 : 14, borderRadius: 9, marginTop: 3, backgroundColor: dot, borderWidth: 2, borderColor: ring, alignItems: 'center', justifyContent: 'center' }}>
+          {state === 'done' ? <T style={{ color: '#fff', fontSize: 9, lineHeight: 11, fontWeight: '800' }}>✓</T> : null}
         </View>
-        {!last ? <View style={{ flex: 1, width: 2, backgroundColor: state === 'done' ? c.accent : c.line, marginTop: 2 }} /> : null}
+        {!last ? (
+          <View style={{ flex: 1, width: 4, borderRadius: 2, backgroundColor: c.line, marginTop: 2, marginBottom: -3 }}>
+            <View style={{ height: pct(drop), width: 4, borderRadius: 2, backgroundColor: c.ok }} />
+            {drop > 0 && drop < 1 ? (
+              <View style={{ position: 'absolute', top: pct(drop), marginTop: -7, left: -5, width: 14, height: 14, borderRadius: 7, backgroundColor: c.ok, borderWidth: 2, borderColor: c.surface }} />
+            ) : null}
+          </View>
+        ) : null}
       </View>
       {/* 가로 템포 */}
       <Pressable accessibilityRole={onPress ? 'button' : undefined} onPress={onPress} disabled={!onPress}

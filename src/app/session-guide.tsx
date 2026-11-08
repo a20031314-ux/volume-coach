@@ -163,12 +163,10 @@ function RunView({ id }: { id: string }) {
   const c = usePalette();
   const insets = useSafeAreaInsets();
   const st = useGuide();
-  const session = useData((s) => s.sessions[id]);
 
   const left = st.until - st.at;
   const counting = st.mode === 'rest' || st.mode === 'move' || (st.timed && st.phase !== '준비' && st.phase !== '자세 잡기');
   const target = st.target;
-  const nextUp = session.exercises.find((e) => e.status === 'pending');
 
   if (st.status === 'done') {
     return (
@@ -185,6 +183,14 @@ function RunView({ id }: { id: string }) {
   const cur = st.items[st.item];
   const inSet = cur && st.mode === 'set' && st.phase !== '준비' && st.phase !== '자세 잡기';
   const repPos = inSet ? repProgress({ it: cur, rep: st.rep, phase: st.phase, lastMove: st.lastMove, since: st.at - st.phaseAt }) : null;
+  // the green flow down the rail while moving to the next exercise
+  const dropOf = (i: number) => {
+    const a = st.spans[i];
+    const b = st.spans[i + 1];
+    if (!a || !b) return 0;
+    if (st.at <= a.end) return 0;
+    return Math.min(1, (st.at - a.end) / Math.max(1, b.start - a.end));
+  };
   const line = st.mode === 'set' ? `${st.label.split(' · ')[1] ?? ''}${target ? ` · ${st.rep}/${target}회` : ''}`
     : st.mode === 'rest' ? `휴식 ${mmss(left)} · ${st.label.split('다음 ')[1] ?? ''} 준비` : st.mode === 'move' ? `이동 ${mmss(left)}` : '';
 
@@ -203,14 +209,14 @@ function RunView({ id }: { id: string }) {
           <T v="big" style={{ fontSize: 72, lineHeight: 80, color: c.accent }}>{st.rep}{target ? <T v="title" style={{ color: c.muted }}> / {target}</T> : null}</T>
         )}
         <T style={{ fontSize: 20, fontWeight: '700', minHeight: 26 }}>{st.phase}</T>
-        {counting && nextUp && st.mode === 'move' ? <T v="muted">{nextUp.name} 기구로 이동하세요</T> : null}
+        {st.mode === 'move' && st.items[st.item + 1] ? <T v="muted">{st.items[st.item + 1].name}(으)로 이동하세요</T> : null}
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: Space.lg, paddingTop: Space.sm }}>
         {st.items.map((it, i) => (
           <TimelineRow key={it.key} it={it} rhythm={st.rhythm} span={st.spans[i]} last={i === st.items.length - 1} at={st.at}
-            state={i < st.item ? 'done' : i === st.item ? 'now' : 'next'}
-            live={i === st.item ? { rep: repPos, line } : undefined} />
+            state={i < st.item || (i === st.item && (st.mode === 'move' || st.mode === 'end')) ? 'done' : i === st.item ? 'now' : 'next'}
+            live={i === st.item && st.mode !== 'move' ? { rep: repPos, line } : undefined} drop={dropOf(i)} />
         ))}
       </ScrollView>
 
