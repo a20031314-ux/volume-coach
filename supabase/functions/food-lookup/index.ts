@@ -31,22 +31,30 @@ const SYSTEM = `너는 한국 음식·프랜차이즈 메뉴의 영양성분을 
 {"found":true,"name":"브랜드 메뉴명","brand":"브랜드","unit":"개|조각|g|마리|인분|잔|팩","base":1,"g_per":null,"k":0,"p":0,"c":null,"f":null,"sugar":null,"sodium":null,"source_url":"출처 URL","source_kind":"official|public|other"}`;
 
 async function askClaude(query: string): Promise<{ parsed: Parsed | null; cited: Set<string>; searches: number }> {
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 1200,
-      system: SYSTEM,
-      tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3, user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' } }],
-      messages: [{ role: 'user', content: `메뉴: ${query.slice(0, 80)}` }],
-    }),
-  });
-  if (!res.ok) throw new Error(`anthropic ${res.status}`);
-  const body = await res.json();
+  const messages: unknown[] = [{ role: 'user', content: `메뉴: ${query.slice(0, 80)}` }];
+  const content: any[] = [];
+  // a long search turn can come back as `pause_turn`; send it back once to let it finish
+  for (let i = 0; i < 2; i++) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': Deno.env.get('ANTHROPIC_API_KEY') ?? '', 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 1200,
+        system: SYSTEM,
+        tools: [{ type: 'web_search_20250305', name: 'web_search', max_uses: 3, user_location: { type: 'approximate', country: 'KR', timezone: 'Asia/Seoul' } }],
+        messages,
+      }),
+    });
+    if (!res.ok) throw new Error(`anthropic ${res.status}`);
+    const body = await res.json();
+    content.push(...(body.content ?? []));
+    if (body.stop_reason !== 'pause_turn') break;
+    messages.push({ role: 'assistant', content: body.content });
+  }
   const cited = new Set<string>();
   let searches = 0, text = '';
-  for (const b of body.content ?? []) {
+  for (const b of content) {
     if (b.type === 'server_tool_use') searches++;
     if (b.type === 'web_search_tool_result' && Array.isArray(b.content)) for (const r of b.content) if (r.url) cited.add(r.url);
     if (b.type === 'text') { text += b.text; for (const ci of b.citations ?? []) if (ci.url) cited.add(ci.url); }

@@ -12,8 +12,10 @@
 ```powershell
 git pull
 npx supabase@latest login
-npx supabase@latest link --project-ref eiohgdcxtugbufuvwkzt
-npx supabase@latest db push                      # food_cache 등 테이블 생성
+npx supabase@latest link --project-ref eiohgdcxtugbufuvwkzt   # DB 비밀번호를 물으면 Supabase → Project Settings → Database에서 확인·재설정
+# 예전 테이블은 SQL Editor로 만들었으므로 "이미 적용됨"으로 표시 (안 하면 db push가 옛 파일을 다시 돌리다 실패)
+npx supabase@latest migration repair --status applied 20261028000000 20261029000000 20261029120000 20261029160000
+npx supabase@latest db push                      # food_cache 등 테이블 생성 (20261107000000만 적용돼야 정상)
 npx supabase@latest secrets set ANTHROPIC_API_KEY=sk-ant-여기에키
 npx supabase@latest functions deploy food-lookup
 ```
