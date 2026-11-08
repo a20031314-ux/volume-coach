@@ -7,6 +7,7 @@ import { Disclosure, Sheet } from '@/components/layout';
 import { LiveSpeedChart } from '@/components/live-speed';
 import { CardioPanel } from '@/components/cardio-panel';
 import { CardioWeek } from '@/components/cardio-week';
+import { PacerSheet, PacerTrack, pacerSummary } from '@/components/pacer';
 import { RouteMap } from '@/components/route-map';
 import { useToast } from '@/components/toast';
 import { Banner, Button, Card, Chip, ConfirmButton, Meter, Pills, Row, Screen, Segmented, Stepper, T } from '@/components/ui';
@@ -18,6 +19,7 @@ import { KIND_NAME, activityKcal, type ActivityKind, type RoutePoint } from '@/l
 import { RATE_NAME, fmtDuration, fmtKm, fmtPace, fmtRate } from '@/lib/run';
 import { SPRINT_DISTANCES, fmtSprint, kmh, sprintProgress } from '@/lib/sprint';
 import { smoothSpeed } from '@/lib/interval';
+import { ghostPacer, planPacer, type Pacer } from '@/lib/pacer';
 import type { IntervalPlanData, RunOptions } from '@/lib/types';
 import {
   coolGps, discardRun, dismissSaved, elapsedS, finishRun, isTrackingAvailable, livePace, openSettings, pauseRun, phasesOf, reconcileRun,
@@ -57,6 +59,7 @@ export default function RunScreen() {
   const [granted, setGranted] = useState(false);
   const [editing, setEditing] = useState(false);
   const [voiceSheet, setVoiceSheet] = useState(false);
+  const [pacerSheet, setPacerSheet] = useState(false);
   /** sprint: GPS is on, waiting for a good fix before the countdown */
   const [gpsWait, setGpsWait] = useState(false);
   const opts = settings.run;
@@ -113,17 +116,30 @@ export default function RunScreen() {
     for (const r of runs) if (r.sprint) out[r.sprint.targetM] = Math.min(out[r.sprint.targetM] ?? Infinity, r.sprint.timeS);
     return out;
   }, [runs]);
-  const begin = () => act(() => startRun({
-    kind,
-    plan: interval ? opts.interval : null,
-    voice: opts.voice,
-    kmAlert: interval || sprint ? false : opts.kmAlert,
-    everyMin: interval || sprint ? 0 : opts.everyMin,
-    unit: unit,
-    targetPaceS: interval || sprint ? null : opts.targetPaceS ?? null,
-    paceAlert: sprint ? false : opts.paceAlert ?? true,
-    sprintM: sprint ? sprintM : null,
-  }));
+  const free = kind === 'run' && opts.mode === 'free';
+  const pacerFor = (): Pacer | null => {
+    const p = free ? opts.pacer : null;
+    if (!p) return null;
+    if (p.kind === 'plan') return planPacer(p);
+    const r = runsT[p.runId];
+    return r && !r.deleted ? ghostPacer(r) : null;
+  };
+  const begin = () => {
+    const pacer = pacerFor();
+    return act(() => startRun({
+      kind,
+      plan: interval ? opts.interval : null,
+      voice: opts.voice,
+      // with a pacer, its own km line (with the gap) replaces the plain one
+      kmAlert: interval || sprint || pacer ? false : opts.kmAlert,
+      everyMin: interval || sprint ? 0 : opts.everyMin,
+      unit: unit,
+      targetPaceS: interval || sprint || pacer ? null : opts.targetPaceS ?? null,
+      paceAlert: sprint || pacer ? false : opts.paceAlert ?? true,
+      sprintM: sprint ? sprintM : null,
+      pacer,
+    }));
+  };
   const countdown = opts.countdown ?? 3;
   const start = async () => {
     setBusy(true); setProblem(null); setGranted(false);
@@ -207,6 +223,16 @@ export default function RunScreen() {
           {kind === 'run' ? (
             <Segmented options={[{ v: 'free', n: '자유' }, { v: 'interval', n: '인터벌' }, { v: 'sprint', n: '스프린트' }]} value={opts.mode} onChange={(v) => v && setOpts({ mode: v })} />
           ) : null}
+          {free ? (
+            <Pressable accessibilityRole="button" onPress={() => setPacerSheet(true)}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, padding: Space.md, borderRadius: Radius.md, backgroundColor: opts.pacer ? c.accentSoft : c.bg }}>
+              <View style={{ flex: 1 }}>
+                <T style={{ fontWeight: '700', color: opts.pacer ? c.accent : c.ink }}>페이스메이커</T>
+                <T v="small">{pacerSummary(opts.pacer, runsT)}</T>
+              </View>
+              <T style={{ color: c.accent }}>{opts.pacer ? '바꾸기 ›' : '설정 ›'}</T>
+            </Pressable>
+          ) : null}
           {interval ? (
             <View style={{ gap: Space.sm }}>
               <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
@@ -255,7 +281,7 @@ export default function RunScreen() {
           {count == null && !gpsWait ? (
             <Pressable accessibilityRole="button" onPress={() => setVoiceSheet(true)} hitSlop={8} style={{ alignSelf: 'center' }}>
               <Text style={{ color: c.muted, fontSize: 13 }}>
-                옵션 · 음성 {opts.voice ? (interval ? '켜짐' : [opts.kmAlert ? '1km' : null, opts.everyMin ? `${opts.everyMin}분` : null].filter(Boolean).join('·') || '켜짐') : '꺼짐'}{opts.targetPaceS && !interval && !sprint ? ` · 목표 ${fmtRate(opts.targetPaceS, unit)}` : ''} ›
+                옵션 · 음성 {opts.voice ? (interval ? '켜짐' : [opts.kmAlert || (free && opts.pacer) ? '1km' : null, opts.everyMin ? `${opts.everyMin}분` : null].filter(Boolean).join('·') || '켜짐') : '꺼짐'}{opts.targetPaceS && !interval && !sprint && !(free && opts.pacer) ? ` · 목표 ${fmtRate(opts.targetPaceS, unit)}` : ''} ›
               </Text>
             </Pressable>
           ) : null}
@@ -288,8 +314,11 @@ export default function RunScreen() {
         </Row>
       </Sheet>
 
+      <PacerSheet open={pacerSheet} onClose={() => setPacerSheet(false)} value={opts.pacer} runs={runs} onChange={(pacer) => setOpts({ pacer })} />
+
       <Sheet open={voiceSheet} title="시작 옵션" onClose={() => setVoiceSheet(false)}>
-        {!interval && !sprint ? (
+        {free && opts.pacer ? <T v="small">페이스메이커가 있으면 목표 페이스 대신 페이스메이커 구간 페이스를 써요.</T> : null}
+        {!interval && !sprint && !(free && opts.pacer) ? (
           <>
             <T v="muted">목표 페이스</T>
             <Stepper label="분/km" value={opts.targetPaceS ?? 0} step={5} min={0} max={900}
@@ -350,6 +379,10 @@ export default function RunScreen() {
           {gpsWeak ? <T v="small" style={{ textAlign: 'center', color: c.warn }}>GPS 신호가 약해요. 기록이 부정확할 수 있어요.</T> : null}
           <ConfirmButton label="중단" confirmLabel="기록 버리고 중단" onConfirm={() => { void discardRun(); toast('스프린트를 중단했어요'); }} style={{ alignSelf: 'center' }} />
         </Card>
+      ) : null}
+
+      {run.pacer && run.status !== 'idle' && !run.sprintM ? (
+        <PacerTrack pacer={run.pacer} t={secs} myM={run.distanceM} reachedS={run.pcues?.reachedS ?? null} />
       ) : null}
 
       {run.status === 'running' && !run.sprintM ? (

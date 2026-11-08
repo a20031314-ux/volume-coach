@@ -27,7 +27,13 @@ import { spokenSprint, sprintProgress } from '@/lib/sprint';
 import { enrichElevation, gpsElevation } from '@/run/elevation-fetch';
 import { enrichWeather } from '@/run/weather-fetch';
 import { ensureNotifications } from '@/store/rest-timer';
+import { gapNow, initialPacerCues, pacerCues, type Pacer, type PacerCueState, type PacerResult } from '@/lib/pacer';
 import { live, useData } from '@/store/store';
+
+function pacerResult(p: Pacer, reachedS: number | null, movingS: number, distanceM: number): PacerResult {
+  const g = gapNow(p, movingS, distanceM);
+  return { kind: p.kind, label: p.label, distanceM: p.distanceM, targetS: p.targetS, reachedS, gapS: reachedS != null ? p.targetS - reachedS : g ? Math.round(g.s) : null };
+}
 
 export const RUN_TASK = 'volume-coach-run-location';
 
@@ -46,6 +52,8 @@ export interface RunSetup {
   paceAlert?: boolean;
   /** sprint distance: timed from the go signal, saved and stopped at this many metres */
   sprintM?: number | null;
+  /** 페이스메이커 to race (designed or a past run) */
+  pacer?: Pacer | null;
 }
 
 interface ActiveRun extends RunSetup {
@@ -68,13 +76,14 @@ interface ActiveRun extends RunSetup {
   startAcc?: number | null;
   /** the run just saved by a sprint that finished on its own */
   justSaved?: string | null;
+  pcues?: PacerCueState;
 }
 
 const idle: ActiveRun = {
   status: 'idle', startedAt: 0, pausedMs: 0, pauseStart: null, seg: 0, points: [], speeds: [], distanceM: 0,
   lastFixAt: null, lastAccuracy: null, cues: initialCues, notifIds: [],
   kind: 'run', plan: null, voice: true, kmAlert: true, everyMin: 0,
-  sprintM: null, warm: false, startAcc: null, justSaved: null,
+  sprintM: null, warm: false, startAcc: null, justSaved: null, pacer: null, pcues: initialPacerCues,
 };
 
 /** AsyncStorage writes at most every 4 s; a long run's track is a few hundred KB. */
@@ -191,6 +200,8 @@ export function targetNow(s: ActiveRun, movingS: number): number | null {
     const p = phaseAt(phases, movingS).phase;
     return p?.kind === 'work' ? s.plan?.targetPaceS ?? null : null;
   }
+  // a designed pacer: the pace of the stretch I'm on
+  if (s.pacer?.legs) return (s.pacer.legs.find((l) => s.distanceM < l.toM) ?? s.pacer.legs[s.pacer.legs.length - 1]).paceS;
   return s.targetPaceS ?? null;
 }
 
@@ -200,7 +211,7 @@ export function tickCues(now = Date.now()) {
   if (s.status !== 'running') return;
   const movingS = elapsedS(s, now);
   const phases = phasesOf(s);
-  const crossedKm = Math.floor(s.distanceM / 1000) > s.cues.km;
+  const crossedKm = Math.floor(s.distanceM / 1000) > Math.min(s.cues.km, s.pcues?.km ?? Infinity);
   const splits = crossedKm ? summarize(s.points).splits : [];
   const { say, next } = dueCues(s.cues, {
     targetNowS: targetNow(s, movingS),
@@ -216,6 +227,13 @@ export function tickCues(now = Date.now()) {
     unit: s.unit,
   });
   if (next !== s.cues && JSON.stringify(next) !== JSON.stringify(s.cues)) useRun.setState({ cues: next });
+  if (s.pacer) {
+    const pc = pacerCues(s.pcues ?? initialPacerCues, {
+      pacer: s.pacer, t: movingS, myM: s.distanceM, lastSplitS: splits.length ? splits[splits.length - 1].seconds : null,
+    });
+    if (JSON.stringify(pc.next) !== JSON.stringify(s.pcues)) useRun.setState({ pcues: pc.next });
+    say.push(...pc.say);
+  }
   if (s.voice) speak(say);
 }
 
@@ -360,7 +378,8 @@ export async function startRun(setup: RunSetup): Promise<StartResult> {
     useRun.setState({ ...idle });
     return { ok: false, message: `위치 기록을 시작하지 못했어요: ${(e as Error).message}` };
   }
-  if (setup.voice && !setup.sprintM) speak([setup.plan ? '인터벌 러닝을 시작합니다' : { run: '러닝을', walk: '걷기를', hike: '등산을', ride: '자전거 기록을', other: '운동을' }[setup.kind] + ' 시작합니다']);
+  if (setup.voice && setup.pacer) speak([`${setup.pacer.kind === 'ghost' ? '지난 기록' : '페이스메이커'}와 함께 시작합니다. ${setup.pacer.label.replace(/·/g, ',')}`]);
+  else if (setup.voice && !setup.sprintM) speak([setup.plan ? '인터벌 러닝을 시작합니다' : { run: '러닝을', walk: '걷기를', hike: '등산을', ride: '자전거 기록을', other: '운동을' }[setup.kind] + ' 시작합니다']);
   tickCues();
   void schedulePhaseNotifications();
   return { ok: true };
@@ -439,6 +458,7 @@ export async function finishRun(): Promise<number | null> {
     timeline: bucketTimeline(s.speeds, 5),
     intervalPlan: s.plan,
     phases: phases ? phaseStats(phases, s.points).filter((p) => p.distanceM > 0 || p.kind === 'work') : undefined,
+    pacer: s.pacer ? pacerResult(s.pacer, s.pcues?.reachedS ?? null, movingS, sum.distanceM) : undefined,
   });
   const saved = useData.getState().runs[id];
   if (saved) {

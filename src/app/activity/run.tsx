@@ -16,6 +16,7 @@ import { gradeAdjustedPace } from '@/lib/elevation';
 import { PHASE_NAME } from '@/lib/interval';
 import { RATE_NAME, fmtDuration, fmtKm, fmtRate, type RateUnit } from '@/lib/run';
 import { fmtSprint, kmh, splitSpeeds } from '@/lib/sprint';
+import { PacerResultCard } from '@/components/pacer';
 import { presetRanges, rangeStats, type Range } from '@/lib/range';
 import { momentAt, routeTimes } from '@/lib/scrub';
 import { clock, runTitle } from '@/lib/timeline';
@@ -82,6 +83,8 @@ export default function RunDetail() {
           ) : null}
         </Card>
       )}
+
+      {r.pacer ? <PacerResultCard p={r.pacer} /> : null}
 
       {r.route.length > 1 ? (
         <View style={{ gap: 6 }}>

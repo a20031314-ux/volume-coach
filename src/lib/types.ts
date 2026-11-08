@@ -1,4 +1,5 @@
 import type { Gear } from './gear';
+import type { PacerChoice, PacerResult } from './pacer';
 import type { GuideSettings } from './guide';
 import type { ActivityKind, Elevation, RoutePoint } from './elevation';
 import type { StrengthProgram } from './progression';
@@ -99,6 +100,8 @@ export interface Run extends SyncMeta {
   phases?: { kind: 'warmup' | 'work' | 'rest' | 'cooldown'; rep: number; durS: number; distanceM: number; paceS: number | null }[];
   /** sprint result, timed from the go signal by GPS speed */
   sprint?: SprintResult | null;
+  /** raced against a 페이스메이커 */
+  pacer?: PacerResult | null;
 }
 
 export interface SprintResult {
@@ -129,6 +132,8 @@ export interface RunOptions {
   sprintM?: number;
   /** free-run target pace, sec/km (null = none) */
   targetPaceS?: number | null;
+  /** 페이스메이커 for free runs (null = none) */
+  pacer?: PacerChoice | null;
   /** voice nudge when off target */
   paceAlert?: boolean;
   /** seconds shown in the live speed chart */
