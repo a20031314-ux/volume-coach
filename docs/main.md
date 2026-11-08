@@ -22,6 +22,7 @@
 - Supabase: 프로젝트 ref `eiohgdcxtugbufuvwkzt` (서울). publishable key는 코드(`src/lib/supabase.ts`)에 기본값으로 들어 있음. **secret / service_role 키는 절대 채팅·코드에 넣지 않음.**
 - 패키지 ID: `com.a20031314ux.volumecoach`
 - 설치·업데이트 방법: 저장소 `docs/test-install.md`
+- **고정 데이터 정리**(모든 사용자 공통: 운동 198·음식 478·유산소 MET 21·무게 비율 55·영양제 시간 65·코스 11, 공식·기준값): https://claude.ai/artifact/LdxukMC2RtyHRVaah7MaZQ (2026-11-08 `bd914b9` 기준, 값 바꾸면 다시 만들기)
 
 ### 개발 흐름
 - 코드만 바뀐 경우: `git pull` → `npm run update` (OTA, 앱 재시작 시 반영)
@@ -95,6 +96,7 @@
 - 점진적 과부하 제안(+2.5kg)
 
 ## 8. 작업 기록
+- 2026-11-08: 고정 데이터(모든 사용자 공통 DB·공식·기준값) 정리 페이지 만듦. 코드 변경 없음
 - 2026-11-08 (26): 가이드 무게 흐름 — 설계 땐 지난 기록 자동, 운동 중 '이 세트 체크', 끝나면 기록 확인 화면에서 다른 칸만 고침(`editSets`). 코드만 → `npm run update`
 - 2026-11-08 (25): 가이드 세트/반복 겹쳐 보임 해결 — 세트는 번호 네모, 반복은 연한 상자 안 눈금 + n/10. 코드만 → `npm run update`
 - 2026-11-08 (24): 가이드 진행 화면 — 종목 끝나면 세로선이 초록으로 내려가 다음 종목에 도달(가로 파랑/세로 초록 구분). 이동 안내 종목명 버그 수정. 코드만 → `npm run update`
