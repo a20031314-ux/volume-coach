@@ -191,7 +191,7 @@ function RunView({ id }: { id: string }) {
     if (st.at <= a.end) return 0;
     return Math.min(1, (st.at - a.end) / Math.max(1, b.start - a.end));
   };
-  const line = st.mode === 'set' ? `${st.label.split(' · ')[1] ?? ''}${target ? ` · ${st.rep}/${target}회` : ''}`
+  const line = st.mode === 'set' ? `${st.label.split(' · ')[1] ?? ''} 진행 중`
     : st.mode === 'rest' ? `휴식 ${mmss(left)} · ${st.label.split('다음 ')[1] ?? ''} 준비` : st.mode === 'move' ? `이동 ${mmss(left)}` : '';
 
   return (
@@ -216,7 +216,7 @@ function RunView({ id }: { id: string }) {
         {st.items.map((it, i) => (
           <TimelineRow key={it.key} it={it} rhythm={st.rhythm} span={st.spans[i]} last={i === st.items.length - 1} at={st.at}
             state={i < st.item || (i === st.item && (st.mode === 'move' || st.mode === 'end')) ? 'done' : i === st.item ? 'now' : 'next'}
-            live={i === st.item && st.mode !== 'move' ? { rep: repPos, line } : undefined} drop={dropOf(i)} />
+            live={i === st.item && st.mode !== 'move' ? { rep: repPos, line, counted: st.rep } : undefined} drop={dropOf(i)} />
         ))}
       </ScrollView>
 

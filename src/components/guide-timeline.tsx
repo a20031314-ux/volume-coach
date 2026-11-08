@@ -19,28 +19,34 @@ const pct = (x: number) => `${Math.max(0, Math.min(100, x * 100))}%` as const;
  * 가로선 위의 점: 이 종목의 세트들이 시간 순서대로 (점 = 세트 시작, 굵은 선 = 세트, 가는 선 = 휴식).
  * 진행 중엔 지금 위치 점이 시간에 따라 오른쪽으로 움직인다.
  */
-export function SetLine({ span, at, big }: { span: ItemSpan; at?: number; big?: boolean }) {
+export function SetLine({ span, at, big, first = 1 }: { span: ItemSpan; at?: number; big?: boolean; first?: number }) {
   const c = usePalette();
   const len = Math.max(1, span.end - span.start);
   const x = (t: number) => (t - span.start) / len;
   const h = big ? 22 : 16;
   const d = big ? 12 : 9;
+  const q = big ? 18 : 14; // 세트 = 번호 붙은 네모
   const live = at != null && at >= span.start && at <= span.end + 0.5;
+  // in a set, the set's square itself shows "now"; the dot is for rests
+  const inSet = at != null && span.sets.some((st) => at >= st.s && at < st.e);
   return (
-    <View style={{ height: h, justifyContent: 'center', marginHorizontal: d / 2 }}>
+    <View style={{ height: Math.max(h, q + 2), justifyContent: 'center', marginHorizontal: q / 2 }}>
       <View style={{ position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: c.line }} />
       {live ? <View style={{ position: 'absolute', left: 0, width: pct(x(at)), height: 2, backgroundColor: c.accent }} /> : null}
       {span.sets.map((st, i) => {
         const done = at != null && at >= st.e;
+        const now = at != null && at >= st.s && at < st.e;
         return (
           <View key={i}>
             <View style={{ position: 'absolute', left: pct(x(st.go)), width: pct(x(st.e) - x(st.go)), top: -2, height: 4, borderRadius: 2, backgroundColor: done ? c.accent : c.band }} />
-            <View style={{ position: 'absolute', left: pct(x(st.s)), top: -d / 2, marginLeft: -d / 2, width: d, height: d, borderRadius: d / 2,
-              backgroundColor: done ? c.accent : c.surface, borderWidth: 2, borderColor: c.accent }} />
+            <View style={{ position: 'absolute', left: pct(x(st.s)), top: -(now ? q + 6 : q) / 2, marginLeft: -(now ? q + 6 : q) / 2, width: now ? q + 6 : q, height: now ? q + 6 : q, borderRadius: 5,
+              backgroundColor: done || now ? c.accent : c.surface, borderWidth: now ? 3 : 1.5, borderColor: now ? c.ink : c.accent, alignItems: 'center', justifyContent: 'center' }}>
+              <T style={{ fontSize: now ? 12 : big ? 10 : 8, lineHeight: now ? 14 : big ? 12 : 10, fontWeight: '800', color: done || now ? c.accentInk : c.accent }}>{first + i}</T>
+            </View>
           </View>
         );
       })}
-      {live ? (
+      {live && !inSet ? (
         <View style={{ position: 'absolute', left: pct(x(at)), marginLeft: -(d + 4) / 2, width: d + 4, height: d + 4, borderRadius: (d + 4) / 2,
           backgroundColor: c.ink, borderWidth: 2, borderColor: c.surface }} />
       ) : null}
@@ -48,23 +54,24 @@ export function SetLine({ span, at, big }: { span: ItemSpan; at?: number; big?: 
   );
 }
 
-/** 지금 세트: 반복마다 점, 움직이는 점이 템포 속도로 다음 점까지 간다 */
-export function RepLine({ count, progress, label }: { count: number; progress: number; label?: string }) {
+/** 지금 세트의 반복: 연한 상자 안 눈금(반복) 위를 파란 점이 템포 속도로 간다 — 세트(번호 네모)와 모양·배경으로 구분 */
+export function RepLine({ count, progress, hold, counted }: { count: number; progress: number; hold?: boolean; counted?: number }) {
   const c = usePalette();
   const n = Math.max(1, Math.min(count, 30));
+  const done = Math.min(n, counted ?? Math.floor(progress * n + 1e-6));
   return (
-    <View style={{ gap: 2 }}>
-      <View style={{ height: 26, justifyContent: 'center', marginHorizontal: 8 }}>
-        <View style={{ position: 'absolute', left: 0, right: 0, height: 3, borderRadius: 2, backgroundColor: c.restSoft }} />
-        <View style={{ position: 'absolute', left: 0, width: pct(progress), height: 3, borderRadius: 2, backgroundColor: c.accent }} />
-        {Array.from({ length: n }, (_, i) => {
-          const at = (i + 1) / n;
-          const hit = progress >= at - 1e-3;
-          return <View key={i} style={{ position: 'absolute', left: pct(at), marginLeft: -4, top: 9, width: 8, height: 8, borderRadius: 4, backgroundColor: hit ? c.accent : c.surface, borderWidth: 2, borderColor: hit ? c.accent : c.line }} />;
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: c.accentSoft, borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8 }}>
+      <T style={{ fontSize: 11, fontWeight: '700', color: c.accent, width: 28 }}>{hold ? '버티기' : '반복'}</T>
+      <View style={{ flex: 1, height: 22, justifyContent: 'center', marginHorizontal: 6 }}>
+        <View style={{ position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: c.band }} />
+        <View style={{ position: 'absolute', left: 0, width: pct(progress), height: 2, backgroundColor: c.accent }} />
+        {hold ? null : Array.from({ length: n }, (_, i) => {
+          const hit = i < done;
+          return <View key={i} style={{ position: 'absolute', left: pct((i + 1) / n), marginLeft: -1, top: 5, width: 2, height: 12, borderRadius: 1, backgroundColor: hit ? c.accent : c.band }} />;
         })}
-        <View style={{ position: 'absolute', left: pct(progress), marginLeft: -9, width: 18, height: 18, borderRadius: 9, backgroundColor: c.accent, borderWidth: 3, borderColor: c.surface }} />
+        <View style={{ position: 'absolute', left: pct(progress), marginLeft: -8, width: 16, height: 16, borderRadius: 8, backgroundColor: c.accent, borderWidth: 3, borderColor: c.surface }} />
       </View>
-      {label ? <T v="small" style={{ fontSize: 11 }}>{label}</T> : null}
+      <T style={{ fontSize: 12, fontWeight: '800', color: c.accent, minWidth: 36, textAlign: 'right', fontVariant: ['tabular-nums'] }}>{hold ? `${Math.round(progress * 100)}%` : `${done}/${n}`}</T>
     </View>
   );
 }
@@ -77,7 +84,7 @@ export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, 
   /** running: timeline seconds now */
   at?: number;
   /** running, this row: the moving dot in the set (null = not in a set) and the caption */
-  live?: { rep: number | null; line: string };
+  live?: { rep: number | null; line: string; counted?: number };
   /** running: how far the move to the next exercise has come down the rail (0–1) */
   drop?: number;
 }) {
@@ -114,8 +121,8 @@ export function TimelineRow({ it, span, state, rhythm, last, onPress, onToggle, 
       {/* 가로 템포 */}
       <Pressable accessibilityRole={onPress ? 'button' : undefined} onPress={onPress} disabled={!onPress}
         style={{ flex: 1, paddingLeft: 6, paddingBottom: 14, gap: 4, opacity: dim ? 0.5 : 1 }}>
-        {span && state !== 'off' ? <SetLine span={span} at={at} big={state === 'now'} /> : <View style={{ height: 16, justifyContent: 'center' }}><View style={{ height: 2, backgroundColor: c.line }} /></View>}
-        {live && live.rep != null ? <RepLine count={kind === 'hold' ? 1 : it.reps} progress={live.rep} /> : null}
+        {span && state !== 'off' ? <SetLine span={span} at={at} big={state === 'now'} first={it.first} /> : <View style={{ height: 16, justifyContent: 'center' }}><View style={{ height: 2, backgroundColor: c.line }} /></View>}
+        {live && live.rep != null ? <RepLine count={kind === 'hold' ? 1 : it.reps} progress={live.rep} hold={kind === 'hold'} counted={live.counted} /> : null}
         <T v="small" style={{ fontSize: 11 }}>
           {live?.line ?? `${span && state !== 'off' ? `${fmtDuration(Math.round(span.start))}부터 · ` : ''}휴식 ${it.rest}초 · 자세 ${it.setup}초${kind === 'rhythm' && rhythm ? ` · ${it.tempo.replace(/-0$/, '')}` : ''}`}
         </T>
