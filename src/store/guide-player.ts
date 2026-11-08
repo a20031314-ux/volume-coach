@@ -8,7 +8,7 @@ import * as Speech from 'expo-speech';
 import { Platform, Vibration } from 'react-native';
 import { create } from 'zustand';
 
-import type { Cue, RunAct, RunCue } from '@/lib/guide';
+import type { Cue, RunAct, RunCue, RunItem } from '@/lib/guide';
 
 export interface Output { voice: boolean; haptic: boolean }
 
@@ -23,11 +23,18 @@ export interface GuideState {
   until: number;
   rep: number;
   phase: string;
+  /** when the phase started (timeline s) and the last moving phase before a 멈춰 */
+  phaseAt: number;
+  lastMove: string;
   item: number;
   target: number | null;
   timed: boolean;
+  /** the planned items (only the ones in the run) and when each starts */
+  items: RunItem[];
+  starts: number[];
+  rhythm: boolean;
 }
-const IDLE: GuideState = { status: 'idle', sessionId: null, at: 0, length: 0, label: '', mode: undefined, until: 0, rep: 0, phase: '', item: 0, target: null, timed: false };
+const IDLE: GuideState = { status: 'idle', sessionId: null, at: 0, length: 0, label: '', mode: undefined, until: 0, rep: 0, phase: '', phaseAt: 0, lastMove: '', item: 0, target: null, timed: false, items: [], starts: [], rhythm: true };
 export const useGuide = create<GuideState>(() => IDLE);
 
 let cues: RunCue[] = [];
@@ -63,7 +70,11 @@ function show(c: RunCue, patch: Partial<GuideState>) {
   if (c.mode != null) patch.mode = c.mode;
   if (c.until != null) patch.until = c.until;
   if (c.rep != null) patch.rep = c.rep;
-  if (c.phase != null) patch.phase = c.phase;
+  if (c.phase != null) {
+    if (c.phase !== '멈춰') patch.lastMove = c.phase;
+    patch.phase = c.phase;
+    patch.phaseAt = c.t;
+  }
   if (c.item != null) patch.item = c.item;
   if (c.target !== undefined) patch.target = c.target;
   if (c.timed != null) patch.timed = c.timed;
@@ -100,13 +111,15 @@ function startClock(from: number) {
   tick();
 }
 
-export function startRun(sessionId: string, timeline: { cues: RunCue[]; length: number }, o: Output, act: (a: RunAct) => void) {
+export function startRun(sessionId: string, timeline: { cues: RunCue[]; length: number }, o: Output, act: (a: RunAct) => void,
+  meta: { items: RunItem[]; rhythm: boolean } = { items: [], rhythm: true }) {
   stopPreview();
   cues = timeline.cues;
   next = 0;
   out = o;
   onAct = act;
-  useGuide.setState({ ...IDLE, status: 'running', sessionId, length: timeline.length });
+  const starts = meta.items.map((_, i) => timeline.cues.find((c) => c.mark && c.item === i)?.t ?? 0);
+  useGuide.setState({ ...IDLE, status: 'running', sessionId, length: timeline.length, items: meta.items, starts, rhythm: meta.rhythm });
   keepAwake(true);
   startClock(0);
 }

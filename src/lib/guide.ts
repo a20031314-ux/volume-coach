@@ -276,3 +276,29 @@ export function buildRun(items: RunItem[], o: RunOpts): { cues: RunCue[]; length
   cues.sort((a, b) => a.t - b.t);
   return { cues, length: T + 1 };
 }
+
+/* ---------- 템포 그림: one rep as blocks, in the order they happen ---------- */
+
+export interface TempoBlock { k: 'down' | 'bottom' | 'up' | 'top'; word: string; s: number }
+
+export function upWordOf(p: Exercise['p']): string {
+  return p === 'hpull' || p === 'vpull' ? '당겨' : p === 'hpush' || p === 'vpush' ? '밀어' : '올려';
+}
+
+export function tempoBlocks(tempo: string, ex: Pick<Exercise, 'p'>): TempoBlock[] {
+  const x = parseTempo(tempo);
+  const down: TempoBlock = { k: 'down', word: '내리고', s: x.down };
+  const bottom: TempoBlock = { k: 'bottom', word: '멈춤', s: x.bottom };
+  const up: TempoBlock = { k: 'up', word: x.explosive ? '빠르게' : upWordOf(ex.p), s: x.up };
+  const top: TempoBlock = { k: 'top', word: '멈춤', s: x.top };
+  const order = PULL.has(ex.p) ? [up, top, down, bottom] : [down, bottom, up, top];
+  return order.filter((b) => b.s > 0);
+}
+
+/** which block a spoken phase is in ('멈춰' after 내리고 = bottom) */
+export function blockOf(phase: string, lastMove: string): TempoBlock['k'] | null {
+  if (phase === '내리고') return 'down';
+  if (phase === '밀어' || phase === '당겨' || phase === '올려' || phase === '빠르게') return 'up';
+  if (phase === '멈춰') return lastMove === '내리고' ? 'bottom' : 'top';
+  return null;
+}
