@@ -1,16 +1,18 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import { FocusPicker } from '@/components/focus-picker';
 import { GearPicker } from '@/components/gear-picker';
+import { budgetMin, dirOf, focusOf, legacyGoal } from '@/lib/focus';
 import { Disclosure } from '@/components/layout';
 import { SavePage } from '@/components/save-bar';
 import { useToast } from '@/components/toast';
-import { Button, Card, NumField, Pills, Row, Segmented, T } from '@/components/ui';
+import { Button, Card, NumField, Row, Segmented, T } from '@/components/ui';
 import { Space } from '@/constants/theme';
 import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { gearOf } from '@/lib/gear';
 import { recommendedVolume, recoveryMultiplier, type VolumeRec } from '@/lib/profile';
-import type { Goal, Profile } from '@/lib/types';
+import type { Profile } from '@/lib/types';
 
 export default function ProfilePrefs() {
   const toast = useToast();
@@ -34,13 +36,15 @@ export default function ProfilePrefs() {
         <View style={{ gap: 6 }}><T v="muted">웨이트 경력</T>
           <Segmented options={[{ v: '0', n: '1년 미만' }, { v: '1', n: '1~3년' }, { v: '3', n: '3년 이상' }]} value={p.years || null} onChange={(v) => setP({ years: (v ?? '') as Profile['years'] })} />
         </View>
-        <View style={{ gap: 6 }}><T v="muted">목표</T>
-          <Pills options={[{ k: 'hyp', n: '근비대' }, { k: 'str', n: '근력' }, { k: 'cut', n: '체지방 감량' }, { k: 'fit', n: '건강·체력' }] as { k: Goal; n: string }[]}
-            value={p.goal} onToggle={(goal) => setP({ goal })} />
-        </View>
         <View style={{ gap: 6 }}><T v="muted">운동 외 활동량</T>
           <Segmented options={[{ v: '0', n: '앉아서' }, { v: '1', n: '자주 걸음' }, { v: '2', n: '서서 일함' }]} value={p.act ?? '1'} onChange={(v) => setP({ act: (v ?? '1') as Profile['act'] })} />
         </View>
+      </Card>
+
+      <Card>
+        <T v="title" style={{ fontSize: 15 }}>목적</T>
+        <FocusPicker focus={focusOf(p)} dir={dirOf(p)} budget={budgetMin(p)}
+          onChange={(focus, weightDir) => setP({ focus, weightDir, goal: legacyGoal(focus, weightDir) })} />
       </Card>
 
       <Card>

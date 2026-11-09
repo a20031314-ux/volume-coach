@@ -8,33 +8,37 @@ import { Pressable, Text, View } from 'react-native';
 
 import { Sheet } from '@/components/layout';
 import { useToast } from '@/components/toast';
-import { Button, Card, NumField, Pills, Row, Segmented, T } from '@/components/ui';
+import { Button, Card, NumField, Row, Segmented, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { knownExercises } from '@/lib/ability';
-import { latestBodyComp, recommendedVolume } from '@/lib/profile';
+import { latestBodyComp } from '@/lib/profile';
+import { FocusPicker } from '@/components/focus-picker';
 import { GearPicker } from '@/components/gear-picker';
+import { budgetMin, dirOf, focusOf, legacyGoal, primary, type Focus, type WeightDir } from '@/lib/focus';
 import { gearOf, type Gear } from '@/lib/gear';
-import { GOAL_NAME, applyGoal, applyMode, applySchedule, needsChoice, startRows, type StartKey } from '@/lib/start';
-import type { Goal, Profile } from '@/lib/types';
+import { applyGoal, applyMode, applySchedule, needsChoice, startRows, type StartKey } from '@/lib/start';
+import type { Profile } from '@/lib/types';
 import { live, newId, useData } from '@/store/store';
 
-const GOALS = (Object.keys(GOAL_NAME) as Goal[]).map((k) => ({ k, n: GOAL_NAME[k] }));
 
 function GoalSheet({ onDone }: { onDone: () => void }) {
   const s = useData((x) => x.settings);
   const update = useData((x) => x.updateSettings);
   const p = s.profile;
-  const [goal, setGoal] = useState<Goal | ''>(p.goal);
+  const [focus, setFocus] = useState<Focus>(focusOf(p));
+  const [dir, setDir] = useState<WeightDir | null>(p.goal ? dirOf(p) : null);
   const [years, setYears] = useState<Profile['years']>(p.years ?? '');
-  const rec = goal ? recommendedVolume({ ...p, goal, years }).rec : null;
+  const goal = legacyGoal(focus, dir);
+  const ok = !!primary(focus) && !!dir;
   return (
     <>
-      <View style={{ gap: 6 }}><T>목적</T><Pills options={GOALS} value={goal || null} onToggle={setGoal} /></View>
+      <T v="small">챙기고 싶은 만큼 탭해서 채워요. 하나만 채워도 되고, 여러 개를 섞어도 돼요.</T>
+      <FocusPicker focus={focus} dir={dir} budget={budgetMin(p)} onChange={(f, d) => { setFocus(f); setDir(d); }} />
       <View style={{ gap: 6 }}><T>웨이트 경력 <T v="small">(선택)</T></T>
         <Segmented options={[{ v: '0', n: '1년 미만' }, { v: '1', n: '1~3년' }, { v: '3', n: '3년 이상' }]} value={years || null} onChange={(v) => setYears((v ?? '') as Profile['years'])} />
       </View>
-      {rec ? <T v="small">이 목적이면 부위당 주 {rec.min}~{rec.max}세트로 시작해요. 운동 규칙에서 언제든 바꿀 수 있어요.</T> : null}
-      <Button label="저장" kind="primary" disabled={!goal} onPress={() => { if (goal) { update(applyGoal(s, { goal, years })); onDone(); } }} />
+      <Button label={ok ? '저장' : !primary(focus) ? '하나 이상 채워 주세요' : '체중 방향을 골라 주세요'} kind="primary" disabled={!ok}
+        onPress={() => { if (ok && goal) { update(applyGoal(s, { goal, years, focus, weightDir: dir })); onDone(); } }} />
     </>
   );
 }

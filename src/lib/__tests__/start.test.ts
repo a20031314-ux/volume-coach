@@ -33,7 +33,7 @@ describe('시작하기', () => {
   it('a chosen goal brings its recommended volume', () => {
     const s = { ...fresh, ...applyGoal(fresh, { goal: 'fit' }) } as Settings;
     expect([s.min, s.max]).toEqual([6, 10]);
-    expect(startRows(s)[0]).toMatchObject({ done: true, summary: '건강·체력' });
+    expect(startRows(s)[0]).toMatchObject({ done: true, summary: '체력 중심 · 건강 · 근비대 · 체중 유지' });
     const hyp = { ...fresh, ...applyGoal(fresh, { goal: 'hyp', years: '3' }) } as Settings;
     expect(hyp.max).toBeGreaterThan(10);
   });

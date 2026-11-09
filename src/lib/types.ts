@@ -1,5 +1,6 @@
 import type { Gear } from './gear';
 import type { PacerChoice, PacerResult } from './pacer';
+import type { Focus, WeightDir } from './focus';
 import type { GuideSettings } from './guide';
 import type { ActivityKind, Elevation, RoutePoint } from './elevation';
 import type { StrengthProgram } from './progression';
@@ -253,6 +254,10 @@ export interface Profile {
   act?: '0' | '1' | '2';
   /** '' = not chosen yet (calculations fall back to maintenance / general defaults) */
   goal: Goal | '';
+  /** 훈련 성향 다각형 (근비대·근력·체력·건강 0~3); unset = read from `goal` */
+  focus?: Focus | null;
+  /** 체중 방향; unset = read from `goal` */
+  weightDir?: WeightDir | null;
   /** training days per week, 2-6 */
   days?: number | null;
   /** minutes per session */

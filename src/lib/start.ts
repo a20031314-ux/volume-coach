@@ -3,6 +3,7 @@
  * Nothing is pre-selected; what isn't chosen shows as 미입력 and calculations use general
  * defaults (maintenance calories, general volume) until it is.
  */
+import { focusLabel } from './focus';
 import { gearOf, gearSummary } from './gear';
 import { recommendedVolume } from './profile';
 import { recommendRoutine } from './routine';
@@ -11,7 +12,6 @@ import type { Profile, Routine, Settings } from './types';
 export type StartKey = 'goal' | 'schedule' | 'body' | 'ability' | 'mode';
 
 export const GOAL_NAME = { hyp: '근비대', str: '근력', cut: '감량', fit: '건강·체력' } as const;
-const YEARS = { '0': '1년 미만', '1': '1~3년', '3': '3년 이상' } as const;
 
 export interface StartRow {
   key: StartKey; title: string; done: boolean; summary: string | null;
@@ -28,7 +28,7 @@ export function startRows(s: Settings, inbodyWeight?: number | null): StartRow[]
   const p = s.profile;
   const w = p.weight || inbodyWeight;
   return [
-    { key: 'goal', title: '목적', required: true, makes: '주간 볼륨·영양 방향', done: !!p.goal, summary: p.goal ? [GOAL_NAME[p.goal], p.years ? YEARS[p.years] : null].filter(Boolean).join(' · ') : null },
+    { key: 'goal', title: '목적', required: true, makes: '주간 볼륨·영양 방향', done: !!p.goal, summary: p.goal ? focusLabel(p) : null },
     {
       key: 'schedule', title: '운동 일정·장비', required: true, makes: '오늘 운동 추천', done: p.days != null,
       summary: p.days != null ? [`주 ${p.days}일`, p.sessionMin ? `${p.sessionMin}분` : null, gearSummary(gearOf(p))].filter(Boolean).join(' · ') : null,

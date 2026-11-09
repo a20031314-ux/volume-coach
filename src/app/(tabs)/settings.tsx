@@ -24,11 +24,11 @@ import { slope, weeklyTrends } from '@/lib/trends';
 import type { Goal } from '@/lib/types';
 import { StartCard } from '@/components/start-card';
 import { useToast } from '@/components/toast';
+import { focusLabel } from '@/lib/focus';
 import { restart, startVisible } from '@/lib/start';
 import { useAuth } from '@/store/auth';
 import { live, useData } from '@/store/store';
 
-const GOAL: Record<Goal | '', string> = { hyp: '근비대', str: '근력', cut: '감량', fit: '건강', '': '목적 미입력' };
 const PERIODS = [{ v: '4', n: '4주' }, { v: '12', n: '12주' }, { v: '26', n: '6개월' }];
 type CardKey = 'body' | 'lift' | 'vol' | 'food';
 /** which card leads, by goal */
@@ -167,7 +167,7 @@ export default function MyScreen() {
       {startVisible(s, inbodyW) ? null : <Pressable accessibilityRole="button" accessibilityLabel="목표 바꾸기" onPress={() => router.push('/prefs/profile')}>
         <Card style={{ gap: 4 }}>
           <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-            <T v="title" style={{ fontSize: 17 }}>{GOAL[p.goal]}{p.days ? ` · 주 ${p.days}일` : ''} · {mode}</T>
+            <T v="title" style={{ fontSize: 17 }}>{focusLabel(p)}{p.days ? ` · 주 ${p.days}일` : ''} · {mode}</T>
             <Text style={{ color: c.muted, fontSize: 18 }}>›</Text>
           </Row>
           <T v="small">주 {s.min}~{s.max}세트{t ? ` · ${t.base.toLocaleString('ko-KR')}kcal · 단백질 ${t.p}g` : ''}</T>
@@ -183,7 +183,7 @@ export default function MyScreen() {
 
       {/* 설정 */}
       <Group title="나">
-        <ListRow label="내 정보" value={[p.age ? `${p.age}세` : null, GOAL[p.goal]].filter(Boolean).join(' · ')} onPress={() => router.push('/prefs/profile')} />
+        <ListRow label="내 정보" value={[p.age ? `${p.age}세` : null, p.goal ? focusLabel(p) : null].filter(Boolean).join(' · ')} onPress={() => router.push('/prefs/profile')} />
         <ListRow label="신체 정보" value={bodyValue} onPress={() => router.push('/prefs/body')} />
         <ListRow label="생활 시간" value={lifeValue} onPress={() => router.push('/prefs/life')} />
         <ListRow label="할 수 있는 운동" value={s.ability.checked ? '체크 완료' : '체크 전'} onPress={() => router.push('/ability')} last />

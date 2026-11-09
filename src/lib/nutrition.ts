@@ -1,3 +1,4 @@
+import { energyAdjust, focusOf } from './focus';
 import { body, proteinTarget, type Body } from './profile';
 import type { BodyComp, Profile, WorkoutLog } from './types';
 
@@ -28,14 +29,16 @@ export function nutritionTargets(p: Profile, comps: BodyComp[], logs: WorkoutLog
   const tdee = bmr * (ACTIVITY[Number(p.act ?? 1)] ?? 1.55);
   const g = p.goal;
   const cutBy = Math.round(Math.min(500, tdee * 0.2));
-  const adj = g === 'cut' ? -cutBy : g === 'hyp' ? 250 : g === 'str' ? 150 : 0;
+  // 체중 방향 (separate from the training focus) decides the surplus / deficit
+  const dir = p.weightDir ? energyAdjust(p.weightDir, focusOf(p), tdee) : null;
+  const adj = dir ? dir.adj : g === 'cut' ? -cutBy : g === 'hyp' ? 250 : g === 'str' ? 150 : 0;
   const trainingDay = logs.some((l) => !l.deleted && l.date === date);
   const kcal = tdee + adj + (trainingDay ? 100 : -100);
   const prot = proteinTarget(p, b);
   const fatRef = b.ffm ?? (b.bmi >= 30 ? 22 * Math.pow(b.height / 100, 2) : b.weight);
   const fat = Math.round(Math.max(fatRef * 0.8, (kcal * 0.2) / 9));
   const carb = Math.max(0, Math.round((kcal - prot.mid * 4 - fat * 9) / 4));
-  const adjustLabel = { hyp: '근비대 · 유지보다 +250kcal', str: '근력 · 유지보다 +150kcal', cut: `감량 · 유지보다 −${cutBy}kcal`, fit: '건강 · 유지 칼로리' }[g];
+  const adjustLabel = dir ? dir.label : { hyp: '근비대 · 유지보다 +250kcal', str: '근력 · 유지보다 +150kcal', cut: `감량 · 유지보다 −${cutBy}kcal`, fit: '건강 · 유지 칼로리' }[g];
   return {
     kcal: Math.round(kcal), p: prot.mid, c: carb, f: fat, tdee: Math.round(tdee), bmr: Math.round(bmr), bmrFormula,
     trainingDay, proteinBasis: prot.basis, adjustLabel, body: b,
