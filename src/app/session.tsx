@@ -266,25 +266,23 @@ function ActiveExercise({ ex, session, lastPerf }: { ex: SessionExercise; sessio
   );
 }
 
-/** 가이드로 쭉 하기 (미리 설계 → 끝까지 음성 진행) */
+/** 음성 가이드: running → status band; otherwise (if turned on) a small link to switch to it */
 function GuideEntry({ id }: { id: string }) {
   const c = usePalette();
-  const g = useData((s) => s.settings.guide);
+  const on = useData((s) => !!s.settings.guide?.on);
   const st = useGuide();
   const go = () => router.push({ pathname: '/session-guide', params: { id } });
   if (st.sessionId === id && st.status !== 'idle') {
     return (
       <Pressable accessibilityRole="button" onPress={go} style={{ backgroundColor: c.accent, borderRadius: Radius.md, padding: Space.md }}>
-        <T style={{ color: c.accentInk, fontWeight: '700' }}>{st.status === 'paused' ? '❚❚ 가이드 일시정지' : '● 가이드 진행 중'} · {st.label} ›</T>
+        <T style={{ color: c.accentInk, fontWeight: '700' }}>{st.status === 'paused' ? '❚❚ 음성 가이드 일시정지' : '● 음성 가이드 진행 중'} · {st.label} ›</T>
       </Pressable>
     );
   }
-  if (g && !g.on) return null;
+  if (!on) return null;
   return (
-    <Pressable accessibilityRole="button" onPress={g ? go : () => router.push('/prefs/guide')}
-      style={{ backgroundColor: c.accentSoft, borderRadius: Radius.md, padding: Space.md, gap: 2 }}>
-      <T style={{ color: c.accent, fontWeight: '700' }}>{g ? '▶ 가이드로 쭉 하기 ›' : '가이드 모드 들어보기 ›'}</T>
-      <T v="small">{g ? '세트·횟수·휴식·자세 잡는 시간을 미리 정하고, 끝까지 음성으로 이어서 진행해요' : '준비 3·2·1, 반복 리듬, 휴식 끝 알림을 음성으로 안내해요'}</T>
+    <Pressable accessibilityRole="button" onPress={go} hitSlop={8} style={{ alignSelf: 'flex-end' }}>
+      <T v="small" style={{ color: c.accent }}>🔊 음성 가이드로 진행 ›</T>
     </Pressable>
   );
 }

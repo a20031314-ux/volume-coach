@@ -54,9 +54,9 @@ export default function RootLayout() {
             <Stack screenOptions={{ headerShown: false }}>
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="session" options={{ gestureEnabled: false }} />
-              <Stack.Screen name="session-guide" options={{ headerShown: true, title: '가이드' }} />
+              <Stack.Screen name="session-guide" options={{ headerShown: true, title: '음성 가이드' }} />
               <Stack.Screen name="program" options={{ headerShown: true, title: '중량 프로그램' }} />
-              <Stack.Screen name="routine" options={{ headerShown: true, title: '루틴 설정' }} />
+              <Stack.Screen name="routine" options={{ headerShown: true, title: '운동 방식' }} />
               <Stack.Screen name="routine-edit" options={{ headerShown: true, title: '루틴 편집' }} />
               <Stack.Screen name="ability" options={{ headerShown: true, title: '할 수 있는 운동 체크' }} />
               <Stack.Screen name="exercises" options={{ headerShown: true, title: '운동 목록' }} />
@@ -69,7 +69,8 @@ export default function RootLayout() {
               <Stack.Screen name="activity/lifts" options={{ headerShown: true, title: '웨이트 기록' }} />
               <Stack.Screen name="activity/move" options={{ headerShown: true, title: '걷기' }} />
               <Stack.Screen name="prefs/fixed" options={{ headerShown: true, title: '고정식단' }} />
-              <Stack.Screen name="prefs/guide" options={{ headerShown: true, title: '가이드 모드' }} />
+              <Stack.Screen name="prefs/guide" options={{ headerShown: true, title: '음성 가이드' }} />
+              <Stack.Screen name="prefs/life" options={{ headerShown: true, title: '생활 시간' }} />
               <Stack.Screen name="prefs/cheat" options={{ headerShown: true, title: '치팅데이' }} />
               <Stack.Screen name="prefs/meal-plan" options={{ headerShown: true, title: '식단 추천' }} />
               <Stack.Screen name="diet-report" options={{ headerShown: true, title: '내 식습관' }} />

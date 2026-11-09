@@ -90,7 +90,7 @@ export default function FoodScreen() {
   );
 
   return (
-    <Screen title="영양" right={<Button label="식습관" kind="ghost" onPress={() => router.push('/diet-report')} />}>
+    <Screen title="영양">
       <DayNav date={date} label={isToday ? `오늘 · ${fmt(date)}` : fmt(date)}
         onPrev={() => setDate(addDays(date, -1))} onNext={() => setDate(addDays(date, 1))} />
 

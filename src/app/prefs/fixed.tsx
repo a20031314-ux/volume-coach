@@ -11,7 +11,7 @@ import { usePreferredFoods } from '@/hooks/use-diet-report';
 import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { DOW } from '@/lib/dates';
 import { fixedOf, freeDef, itemLabel, type FixedItem } from '@/lib/fixed';
-import { SUPP_SECTIONS, caffeineWarnings, suggestTimes, usualWorkout, type TimingContext } from '@/lib/fixed-timing';
+import { SUPP_SECTIONS, caffeineWarnings, suggestTimes, timingContext, type TimingContext } from '@/lib/fixed-timing';
 import { useCloudFoods } from '@/lib/food-lookup';
 import { FOOD_DB, amountLabel, type FoodDef } from '@/lib/foods';
 import { hhmm } from '@/lib/meal-plan';
@@ -36,7 +36,7 @@ export default function FixedPrefs() {
   const [q, setQ] = useState('');
   const [find, setFind] = useState('');
 
-  const ctx: TimingContext = useMemo(() => ({ meals: [...settings.mealPlan.times].sort((a, b) => a - b), workout: usualWorkout(live(sessionsT)) }), [settings.mealPlan.times, sessionsT]);
+  const ctx: TimingContext = useMemo(() => timingContext(settings, live(sessionsT)), [settings, sessionsT]);
   const chosen = f.items.map((x) => x.n);
   // chosen items are timed together (so clashes stay apart); the rest as if added now
   const timed = suggestTimes(chosen, ctx);

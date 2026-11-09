@@ -1,5 +1,5 @@
 /**
- * Plays 가이드 모드: one timeline for the whole workout (lib/guide buildRun), speech (expo-speech) and short
+ * Plays 음성 가이드: one timeline for the whole workout (lib/guide buildRun), speech (expo-speech) and short
  * vibrations, with 일시정지 / 이어서 / 이 세트 처음부터 / 다음으로. A 100ms clock walks the cues, so pausing
  * just stops the clock. Keeps the screen on while running (timers stop when the phone sleeps, iOS especially).
  */

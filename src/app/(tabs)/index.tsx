@@ -127,12 +127,16 @@ export default function Today() {
     ? { label: '이어서 하기', onPress: () => router.push({ pathname: '/session', params: { id: running.id } }) }
     : {
         label: items.length ? '운동 시작' : '빈 운동으로 시작',
-        onPress: () => {
-          const sid = startSession(startList, settings.session.detail, routine && rp.day ? { routineId: routine.id, dayKey: rp.day.key } : undefined);
-          setDayOverride(null);
-          router.push({ pathname: '/session', params: { id: sid } });
-        },
+        onPress: () => begin(false),
       };
+  // 진행 방식: 직접 기록(기본) / 음성 가이드(설계 화면부터)
+  function begin(guided: boolean) {
+    const sid = startSession(startList, settings.session.detail, routine && rp.day ? { routineId: routine.id, dayKey: rp.day.key } : undefined);
+    setDayOverride(null);
+    router.push({ pathname: '/session', params: { id: sid } });
+    if (guided) router.push({ pathname: '/session-guide', params: { id: sid } });
+  }
+  const alt = !running && items.length && settings.guide?.on ? { label: '🔊 음성 가이드로 시작', onPress: () => begin(true) } : null;
 
   const hint = deload
     ? { key: `deload:${result.W}`, text: deload, action: '디로드 켜기', run: () => updateSettings({ deload: true }) }
@@ -162,7 +166,7 @@ export default function Today() {
           }} />
         </Card>
       ) : (
-        <PlanView title={title} meta={meta} notice={notice} start={start} items={items} ready={settings.ready}
+        <PlanView title={title} meta={meta} notice={notice} start={start} alt={alt} items={items} ready={settings.ready}
           empty={routine ? undefined : '이번 주 목표를 채웠거나 남은 부위가 회복 중이에요.'} />
       )}
 

@@ -10,6 +10,7 @@ import { knownExercises } from '@/lib/ability';
 import { MUSCLES } from '@/lib/exercises';
 import { gearOf } from '@/lib/gear';
 import { recommendRoutine, weeklyVolume } from '@/lib/routine';
+import { SHORT } from '@/lib/strength';
 import type { Profile, Routine } from '@/lib/types';
 import { live, newId, useData } from '@/store/store';
 import { router } from 'expo-router';
@@ -52,6 +53,10 @@ export default function RoutineHub() {
     <SavePage dirty={dirty} onSave={saveDraft} onReset={reset}>
       <Segmented options={[{ v: 'auto', n: '자율형' }, { v: 'routine', n: '루틴형' }]} value={s.planMode}
         onChange={(v) => v && update({ planMode: v })} />
+
+      <Group>
+        <ListRow label="중량 프로그램" value={s.program ? `${SHORT[s.program.lift]} → ${s.program.target1rm}kg` : '꺼짐 · 자율형·루틴형에 더해서'} onPress={() => router.push('/program')} last />
+      </Group>
 
       {s.planMode === 'auto' ? (
         <Group>

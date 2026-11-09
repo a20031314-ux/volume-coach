@@ -24,12 +24,14 @@ export interface PlanItem {
 }
 
 /** Today's workout: one hero card (what + start), then the exercise list. Details open per row. */
-export function PlanView({ title, meta, notice, start, items, ready, empty }: {
+export function PlanView({ title, meta, notice, start, alt, items, ready, empty }: {
   title: string;
   meta: string;
   /** one short line that needs attention, optionally tappable */
   notice?: { text: string; action?: string; onPress?: () => void } | null;
   start: { label: string; onPress: () => void };
+  /** a second way to start (음성 가이드) */
+  alt?: { label: string; onPress: () => void } | null;
   items: PlanItem[];
   ready: number;
   empty?: string;
@@ -51,6 +53,7 @@ export function PlanView({ title, meta, notice, start, items, ready, empty }: {
           </Pressable>
         ) : null}
         <Button label={start.label} kind="primary" onPress={start.onPress} style={{ paddingVertical: 15 }} />
+        {alt ? <Button label={alt.label} kind="ghost" onPress={alt.onPress} /> : null}
       </View>
 
       {items.length ? (

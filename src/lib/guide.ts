@@ -1,5 +1,5 @@
 /**
- * 가이드 모드: spoken cues for a set — "2세트 준비, 3, 2, 1, 시작", then the rhythm of each rep
+ * 음성 가이드: spoken cues for a set — "2세트 준비, 3, 2, 1, 시작", then the rhythm of each rep
  * (템포 3-0-1: 내리고 … 올려, 하나), "세트 끝", and during rest "30초 남았어요 … 2세트 준비".
  * Pure: builds a timeline of cues; the player speaks them.
  */

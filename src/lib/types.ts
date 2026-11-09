@@ -316,13 +316,15 @@ export interface Settings {
   oneRm?: Partial<Record<string, number>>;
   /** 식단 추천 at set meal times */
   mealPlan: MealPlanSettings;
+  /** 생활 시간 (minutes after midnight; null/unset = 자동 추정). 끼니 시간은 mealPlan.times */
+  life?: { wake?: number | null; bed?: number | null; workout?: number | null };
   /** 식사 코스 the user saved (고깃집 + 볶음밥 …) */
   courses?: SavedCourse[];
   /** 치팅데이 저금통 + 상쇄 */
   cheat?: CheatSettings;
   /** 고정식단: foods / supplements eaten on a schedule */
   fixed?: FixedSettings;
-  /** 가이드 모드: spoken countdown, rep rhythm and rest cues (unset = never set up) */
+  /** 음성 가이드: spoken countdown, rep rhythm and rest cues (unset = never set up) */
   guide?: GuideSettings;
   updatedAt: number;
 }

@@ -67,6 +67,7 @@ export default function MyScreen() {
   const marks = Object.keys(s.exercisePrefs).length;
   const mode = s.planMode === 'routine' && routine && !routine.deleted ? routine.name : '자율형';
 
+  const lifeValue = [s.life?.wake != null ? `기상 ${hhmm(s.life.wake)}` : null, `끼니 ${s.mealPlan.times.length}번`, s.life?.bed != null ? `취침 ${hhmm(s.life.bed)}` : null].filter(Boolean).join(' · ');
   const t = useMemo(() => dayTarget({ settings: s, comps: live(bodyT), logs: live(logsT), meals: live(mealsT) }, d0, d0), [s, bodyT, logsT, mealsT, d0]);
   const tr = useMemo(() => weeklyTrends({
     logs: live(logsT), sessions: live(sessionsT), meals: live(mealsT), comps: live(bodyT), off: s.off, min: s.min, max: s.max,
@@ -180,23 +181,29 @@ export default function MyScreen() {
       {ORDER[p.goal || 'hyp'].map((k) => cards[k])}
 
       {/* 설정 */}
-      <Group title="운동">
-        <ListRow label="운동 방식" value={mode} onPress={() => router.push('/routine')} />
-        <ListRow label="중량 프로그램" value={s.program ? `${SHORT[s.program.lift]} → ${s.program.target1rm}kg` : '꺼짐'} onPress={() => router.push('/program')} />
-        <ListRow label="할 수 있는 운동" value={s.ability.checked ? '체크 완료' : '체크 전'} onPress={() => router.push('/ability')} />
-        <ListRow label="운동 목록" value={marks ? `표시 ${marks}개` : undefined} onPress={() => router.push('/exercises')} />
-        <ListRow label="운동 규칙" value={`주 ${s.min}~${s.max}세트${s.deload ? ' · 디로드' : ''}`} onPress={() => router.push('/prefs/rules')} />
-        <ListRow label="기록 방식" value={s.session.detail === 'set' ? '세트별' : '운동별'} onPress={() => router.push('/prefs/workout')} />
-        <ListRow label="가이드 모드" value={s.guide?.on ? `켜짐${s.guide.only.length ? ` · ${s.guide.only.length}종목` : ''}${s.guide.rest ? '' : ' · 휴식 안내 끔'}` : '꺼짐'} onPress={() => router.push('/prefs/guide')} />
-        <ListRow label="걸음 수" value={health ? HEALTH_NAME : '꺼짐'} onPress={() => router.push('/prefs/health')} last />
-      </Group>
-
       <Group title="나">
         <ListRow label="내 정보" value={[p.age ? `${p.age}세` : null, GOAL[p.goal]].filter(Boolean).join(' · ')} onPress={() => router.push('/prefs/profile')} />
         <ListRow label="신체 정보" value={bodyValue} onPress={() => router.push('/prefs/body')} />
+        <ListRow label="생활 시간" value={lifeValue} onPress={() => router.push('/prefs/life')} />
+        <ListRow label="할 수 있는 운동" value={s.ability.checked ? '체크 완료' : '체크 전'} onPress={() => router.push('/ability')} last />
+      </Group>
+
+      <Group title="계획">
+        <ListRow label="운동 방식" value={`${mode}${s.program ? ` + ${SHORT[s.program.lift]} 프로그램` : ''}`} onPress={() => router.push('/routine')} />
+        <ListRow label="운동 규칙" value={`주 ${s.min}~${s.max}세트${s.deload ? ' · 디로드' : ''}`} onPress={() => router.push('/prefs/rules')} />
+        <ListRow label="운동 목록" value={marks ? `표시 ${marks}개` : undefined} onPress={() => router.push('/exercises')} last />
+      </Group>
+
+      <Group title="운동하기">
+        <ListRow label="기록 방식" value={s.session.detail === 'set' ? '세트별' : '운동별'} onPress={() => router.push('/prefs/workout')} />
+        <ListRow label="음성 가이드" value={s.guide?.on ? `켜짐${s.guide.only.length ? ` · ${s.guide.only.length}종목` : ''}` : '꺼짐'} onPress={() => router.push('/prefs/guide')} />
+        <ListRow label="걸음 수" value={health ? HEALTH_NAME : '꺼짐'} onPress={() => router.push('/prefs/health')} last />
+      </Group>
+
+      <Group title="먹기">
+        <ListRow label="식단 추천" value={s.mealPlan.on ? '켜짐' : '꺼짐'} onPress={() => router.push('/prefs/meal-plan')} />
         <ListRow label="고정식단" value={s.fixed?.items.length ? `${s.fixed.items.length}개` : '없음'} onPress={() => router.push('/prefs/fixed')} />
-        <ListRow label="치팅데이" value={s.cheat?.on ? (s.cheat.mode === 'weekly' ? `매주 ${DOW[s.cheat.dow]}요일` : s.cheat.date ?? '날짜 지정') : '꺼짐'} onPress={() => router.push('/prefs/cheat')} />
-        <ListRow label="식단 추천" value={s.mealPlan.on ? s.mealPlan.times.map(hhmm).join(' · ') : '꺼짐'} onPress={() => router.push('/prefs/meal-plan')} last />
+        <ListRow label="치팅데이" value={s.cheat?.on ? (s.cheat.mode === 'weekly' ? `매주 ${DOW[s.cheat.dow]}요일` : s.cheat.date ?? '날짜 지정') : '꺼짐'} onPress={() => router.push('/prefs/cheat')} last />
       </Group>
 
       <Group title="계정">

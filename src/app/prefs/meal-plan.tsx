@@ -1,17 +1,15 @@
-/** 식단 추천: meal times and on/off. */
+/** 식단 추천: on/off (끼니 시간은 생활 시간에서). */
+import { router } from 'expo-router';
 import { Platform, View } from 'react-native';
 
 import { SavePage } from '@/components/save-bar';
 import { useToast } from '@/components/toast';
-import { Button, Card, Row, Segmented, Stepper, T } from '@/components/ui';
+import { Button, Card, Row, Segmented, T } from '@/components/ui';
 import { Space } from '@/constants/theme';
 import { usePreferredFoods } from '@/hooks/use-diet-report';
 import { useSettingsDraft } from '@/hooks/use-settings-draft';
 import { hhmm, mealName, staples } from '@/lib/meal-plan';
 import { enableMealReminders } from '@/store/meal-reminders';
-
-const STEP = 30;
-const MAX_MEALS = 6;
 
 export default function MealPlanPrefs() {
   const toast = useToast();
@@ -21,7 +19,6 @@ export default function MealPlanPrefs() {
   const { protein, carb } = staples(prefer);
 
   const set = (patch: Partial<typeof plan>) => update({ mealPlan: { ...plan, ...patch } });
-  const setTime = (i: number, m: number) => set({ times: plan.times.map((t, j) => (j === i ? m : t)).sort((a, b) => a - b) });
 
   const turn = (on: boolean) => set({ on });
   // notification permission is asked when the change is saved
@@ -39,22 +36,14 @@ export default function MealPlanPrefs() {
       </Card>
 
       {plan.on ? (<>
-        <T v="label">끼니 시간</T>
-        <Card>
-          {plan.times.map((m, i) => (
-            <Row key={i} gap={Space.md} style={{ flexWrap: 'nowrap', alignItems: 'flex-end' }}>
-              <View style={{ flex: 1 }}>
-                <Stepper label={mealName(m)} value={m} step={STEP} min={0} max={24 * 60 - STEP} format={hhmm} onChange={(v) => setTime(i, v)} />
-              </View>
-              {plan.times.length > 1 ? (
-                <Button label="삭제" kind="ghost" onPress={() => set({ times: plan.times.filter((_, j) => j !== i) })} />
-              ) : null}
-            </Row>
-          ))}
-          {plan.times.length < MAX_MEALS ? (
-            <Button label="+ 끼니 추가" onPress={() => set({ times: [...plan.times, Math.min(23 * 60, (plan.times.at(-1) ?? 12 * 60) + 3 * 60)].sort((a, b) => a - b) })}
-              style={{ alignSelf: 'flex-start' }} />
-          ) : null}
+        <Card style={{ gap: 4 }}>
+          <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+            <View style={{ flex: 1 }}>
+              <T>끼니 시간</T>
+              <T v="muted">{plan.times.map((m) => `${mealName(m)} ${hhmm(m)}`).join(' · ')}</T>
+            </View>
+            <Button label="생활 시간 ›" kind="ghost" onPress={() => router.push('/prefs/life')} />
+          </Row>
         </Card>
 
         <T v="label">추천에 쓰는 음식</T>

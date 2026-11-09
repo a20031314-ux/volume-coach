@@ -11,6 +11,21 @@ export interface TimingContext {
   meals: number[];
   /** usual workout start and length, when known */
   workout: { start: number; minutes: number } | null;
+  /** 생활 시간에서 직접 정한 기상·취침 (없으면 끼니로 추정) */
+  wake?: number | null;
+  bed?: number | null;
+}
+
+/** the timing context from settings + history: 생활 시간 first, then estimates */
+export function timingContext(s: { mealPlan: { times: number[] }; life?: { wake?: number | null; bed?: number | null; workout?: number | null } }, sessions: Session[]): TimingContext {
+  const usual = usualWorkout(sessions);
+  const w = s.life?.workout;
+  return {
+    meals: [...s.mealPlan.times].sort((a, b) => a - b),
+    workout: w != null ? { start: w, minutes: usual?.minutes ?? 60 } : usual,
+    wake: s.life?.wake ?? null,
+    bed: s.life?.bed ?? null,
+  };
 }
 
 type Anchor = 'empty' | 'breakfast' | 'lunch' | 'dinner' | 'bed' | 'snack' | 'pre' | 'during' | 'post';
@@ -137,11 +152,11 @@ function anchorTime(a: Anchor, ctx: TimingContext): number {
   const breakfast = m[0], dinner = m[m.length - 1], lunch = m.length >= 3 ? m[1] : Math.round((breakfast + dinner) / 2);
   const w = ctx.workout;
   switch (a) {
-    case 'empty': return breakfast - 30;
+    case 'empty': return ctx.wake != null ? Math.min(ctx.wake + 15, breakfast - 30) : breakfast - 30;
     case 'breakfast': return breakfast;
     case 'lunch': return lunch;
     case 'dinner': return dinner;
-    case 'bed': return Math.min(dinner + 180, 23 * 60);
+    case 'bed': return ctx.bed ?? Math.min(dinner + 180, 23 * 60);
     case 'snack': return Math.round((lunch + dinner) / 2);
     case 'pre': return w ? w.start - 45 : lunch + 180;
     case 'during': return w ? w.start + Math.round(w.minutes / 2) : dinner - 60;
