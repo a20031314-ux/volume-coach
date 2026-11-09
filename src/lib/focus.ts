@@ -1,8 +1,9 @@
 /**
  * 목적 = 훈련 성향(다각형: 근비대 · 근력 · 체력 · 건강, 각 0~3) + 체중 방향(감량 / 유지 / 증량, 하나).
  *
- * 다각형의 "꽉"(모든 축 3)은 주간 운동 시간으로 정한다: 축마다 단계별로 주에 드는 시간이 있고,
- * 다 합친 게 원하는 양, 운동 일정(주 N일 × 1회 분)이 쓸 수 있는 양. 넘치면 비율대로 줄인다.
+ * 다각형의 "꽉"(모든 축 3)은 주간 운동 시간으로 정한다. 축은 따로가 아니라서(중간 무게 세트는 근비대와
+ * 근력에 같이, 근력운동은 건강에도 쌓임) 실제 운동 4가지(`EFFECT`)로 모든 축 목표를 채우는 가장 짧은 시간을 구한다.
+ * 운동 일정(주 N일 × 1회 분)이 쓸 수 있는 양, 넘치면 비율대로 줄인다.
  *
  * 1단계: 계산(볼륨·반복·휴식·템포)은 아직 가장 높은 축 하나로 — `legacyGoal`이 예전 목적 값을 만든다.
  */
@@ -19,8 +20,7 @@ export const DIR_NAME: Record<WeightDir, string> = { cut: '감량', keep: '유�
 export const NO_FOCUS: Focus = { hyp: 0, str: 0, fit: 0, health: 0 };
 
 /**
- * 단계별 주간 시간(분)과 그게 뜻하는 것. 3 = 그 성향을 제대로 챙기는 양(대회 준비 수준은 아님).
- * 모든 축 3 = 405분 ≈ 주 6일 × 70분 → 이게 다각형이 "꽉 찬" 기준.
+ * 축별 목표 = 그 효과를 얻는 데 필요한 "효과 시간"(분/주). 3 = 그 성향을 제대로 챙기는 양(대회 준비 수준은 아님).
  */
 export const LEVEL_MIN: Record<FocusKey, [number, number, number, number]> = {
   hyp: [0, 60, 120, 180],
@@ -34,20 +34,76 @@ export const LEVEL_NOTE: Record<FocusKey, [string, string, string]> = {
   fit: ['유산소·인터벌 주 1회', '주 2회', '주 3회 (회당 30분)'],
   health: ['가동성·코어 회당 5분', '회당 10분', '회당 15분 + 쉬운 종목 위주'],
 };
-export const FULL_MIN = FOCUS_KEYS.reduce((a, k) => a + LEVEL_MIN[k][3], 0);
 export const DEFAULT_SESSION_MIN = 60;
 
-export const demandMin = (f: Focus) => FOCUS_KEYS.reduce((a, k) => a + LEVEL_MIN[k][f[k]], 0);
-export const budgetMin = (p: Pick<Profile, 'days' | 'sessionMin'>) => (p.days ? p.days * (p.sessionMin ?? DEFAULT_SESSION_MIN) : null);
+/* ---------- 축은 따로가 아니다: 실제로 하는 운동 4가지가 여러 축에 같이 쌓인다 ---------- */
 
-/** minutes per axis that fit the schedule (scaled down evenly when the wish is bigger) */
-export function allotMin(f: Focus, budget: number | null): Record<FocusKey, number> & { scale: number } {
-  const want = demandMin(f);
-  const scale = budget && want > budget ? budget / want : 1;
-  const out = { scale } as Record<FocusKey, number> & { scale: number };
-  for (const k of FOCUS_KEYS) out[k] = Math.round(LEVEL_MIN[k][f[k]] * scale);
-  return out;
+export type WorkKey = 'mod' | 'heavy' | 'cardio' | 'mobility';
+export const WORK_NAME: Record<WorkKey, string> = { mod: '중간 무게 (6~12회)', heavy: '무거운 세트 (1~5회)', cardio: '유산소·인터벌', mobility: '가동성·코어' };
+
+/**
+ * 1분 했을 때 각 축에 쌓이는 효과(추정치). 중간 무게 세트는 근비대에 1, 근력에 0.5;
+ * 무거운 세트는 근력 1, 근비대 0.6; 근력운동·유산소는 건강에도 쌓인다.
+ */
+export const EFFECT: Record<WorkKey, Record<FocusKey, number>> = {
+  mod: { hyp: 1, str: 0.5, fit: 0, health: 0.3 },
+  heavy: { hyp: 0.6, str: 1, fit: 0, health: 0.3 },
+  cardio: { hyp: 0, str: 0, fit: 1, health: 0.5 },
+  mobility: { hyp: 0, str: 0, fit: 0, health: 1 },
+};
+/** 그래도 각 축은 제 운동이 있어야 한다: 근비대의 절반은 중간 무게, 근력의 절반은 무거운 세트, 체력은 전부 유산소, 건강의 1/3은 가동성 */
+const SPECIFIC = { hyp: 0.5, str: 0.5, fit: 1, health: 1 / 3 };
+const OWN: Record<FocusKey, WorkKey> = { hyp: 'mod', str: 'heavy', fit: 'cardio', health: 'mobility' };
+
+export interface WorkPlan {
+  /** minutes a week of each kind of work */
+  work: Record<WorkKey, number>;
+  total: number;
+  /** if each axis were trained on its own */
+  naive: number;
+  /** effect each axis gets (minutes-equivalent), including what carries over */
+  effect: Record<FocusKey, number>;
+  /** 1 = fits the schedule; < 1 = everything scaled down to fit */
+  scale: number;
 }
+
+const tgt = (f: Focus, k: FocusKey) => LEVEL_MIN[k][f[k]];
+
+/** the least total time that reaches every axis' target (small LP, solved by its corners) */
+export function planWork(f: Focus, budget: number | null = null): WorkPlan {
+  const Th = tgt(f, 'hyp'), Ts = tgt(f, 'str'), Tf = tgt(f, 'fit'), Tg = tgt(f, 'health');
+  const m0 = Th * SPECIFIC.hyp, h0 = Ts * SPECIFIC.str;
+  const ok = (m: number, h: number) => m >= m0 - 1e-6 && h >= h0 - 1e-6 && m + EFFECT.heavy.hyp * h >= Th - 1e-6 && h + EFFECT.mod.str * m >= Ts - 1e-6;
+  const cands: [number, number][] = [];
+  { const m = Math.max(m0, Th - EFFECT.heavy.hyp * h0); cands.push([m, Math.max(h0, Ts - EFFECT.mod.str * m)]); }
+  { const h = Math.max(h0, Ts - EFFECT.mod.str * m0); cands.push([Math.max(m0, Th - EFFECT.heavy.hyp * h), h]); }
+  { const m = (Th - EFFECT.heavy.hyp * Ts) / (1 - EFFECT.heavy.hyp * EFFECT.mod.str); cands.push([m, Ts - EFFECT.mod.str * m]); }
+  const [m, h] = cands.filter(([a, b]) => ok(a, b)).sort((a, b) => a[0] + a[1] - (b[0] + b[1]))[0] ?? [Math.max(m0, Th), Math.max(h0, Ts)];
+  const c = Tf * SPECIFIC.fit;
+  const g = Tg ? Math.max(Tg * SPECIFIC.health, Tg - EFFECT.mod.health * m - EFFECT.heavy.health * h - EFFECT.cardio.health * c) : 0;
+  const work = { mod: m, heavy: h, cardio: c, mobility: g };
+  const total = m + h + c + g;
+  const scale = budget && total > budget ? budget / total : 1;
+  const effect = {} as Record<FocusKey, number>;
+  // what carries over from other work only goes so far (근비대 운동만으로는 근력 1.5단계까지)
+  for (const k of FOCUS_KEYS) {
+    const own = work[OWN[k]] * EFFECT[OWN[k]][k];
+    const carry = (Object.keys(work) as WorkKey[]).filter((w) => w !== OWN[k]).reduce((a, w) => a + work[w] * EFFECT[w][k], 0);
+    effect[k] = (own + Math.min(carry, (1 - SPECIFIC[k]) * LEVEL_MIN[k][3])) * scale;
+  }
+  const r = (x: number) => Math.round(x);
+  return {
+    work: { mod: r(m * scale), heavy: r(h * scale), cardio: r(c * scale), mobility: r(g * scale) },
+    total: r(total), naive: Th + Ts + Tf + Tg, effect, scale,
+  };
+}
+
+/** an axis' effect on the 0~3 scale (can go past 3 when it carries over a lot) */
+export const effectLevel = (k: FocusKey, minutes: number) => (3 * minutes) / LEVEL_MIN[k][3];
+
+/** every axis at 3, with the overlap counted once — the "꽉 찬" polygon */
+export const FULL_MIN = planWork({ hyp: 3, str: 3, fit: 3, health: 3 }).total;
+export const budgetMin = (p: Pick<Profile, 'days' | 'sessionMin'>) => (p.days ? p.days * (p.sessionMin ?? DEFAULT_SESSION_MIN) : null);
 
 /** the axis that leads (ties: 근비대 > 근력 > 체력 > 건강) */
 export function primary(f: Focus): FocusKey | null {

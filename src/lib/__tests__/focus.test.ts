@@ -1,18 +1,26 @@
 import { describe, expect, it } from 'vitest';
 
-import { allotMin, budgetMin, demandMin, dirOf, energyAdjust, FULL_MIN, focusLabel, focusOf, legacyGoal, primary } from '../focus';
+import { budgetMin, dirOf, effectLevel, energyAdjust, FULL_MIN, focusLabel, focusOf, legacyGoal, planWork, primary } from '../focus';
 import { nutritionTargets } from '../nutrition';
 import type { Profile } from '../types';
 
 describe('목적 다각형', () => {
-  it('a full polygon is 405 minutes a week; the schedule is the budget', () => {
-    expect(FULL_MIN).toBe(405);
-    expect(demandMin({ hyp: 3, str: 2, fit: 1, health: 0 })).toBe(270);
+  it('axes overlap: 근비대 work counts toward 근력 and 건강, so a mix needs less than the sum', () => {
+    const p = planWork({ hyp: 3, str: 2, fit: 0, health: 0 });
+    expect(p.naive).toBe(240);
+    expect(p.total).toBe(192);
+    expect(p.work).toMatchObject({ mod: 162, heavy: 30, cardio: 0 });
+    // 근비대만 골라도 근력·건강이 따라오지만, 제 운동 없이는 1.5단계 / 2단계까지만
+    const only = planWork({ hyp: 3, str: 0, fit: 0, health: 0 });
+    expect(effectLevel('str', only.effect.str)).toBeCloseTo(1.5);
+    expect(effectLevel('health', only.effect.health)).toBeCloseTo(2);
+    expect(effectLevel('fit', only.effect.fit)).toBe(0);
+    // 꽉 찬 다각형, 겹침을 한 번만 세면
+    expect(FULL_MIN).toBe(303);
     expect(budgetMin({ days: 4, sessionMin: null })).toBe(240);
-    const a = allotMin({ hyp: 3, str: 2, fit: 1, health: 0 }, 240);
-    expect(a.scale).toBeCloseTo(240 / 270);
-    expect(a.hyp + a.str + a.fit).toBeLessThanOrEqual(241);
-    expect(allotMin({ hyp: 2, str: 0, fit: 0, health: 0 }, 240).scale).toBe(1);
+    const tight = planWork({ hyp: 3, str: 2, fit: 2, health: 1 }, 240);
+    expect(tight.scale).toBeLessThan(1);
+    expect(Object.values(tight.work).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(241);
   });
   it('the top axis still drives the old single goal; 감량 wins', () => {
     expect(primary({ hyp: 2, str: 2, fit: 3, health: 0 })).toBe('fit');
