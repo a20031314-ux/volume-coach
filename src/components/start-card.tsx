@@ -1,4 +1,7 @@
-/** 시작하기 (MY 맨 위): four choices, each in a sheet, nothing pre-selected. */
+/**
+ * 시작하기 (MY 맨 위): 필수 3개(목적 · 운동 일정 · 몸 정보 → 오늘 운동 + 영양 목표)와
+ * 더 정확하게 2개(할 수 있는 운동 · 운동 방식). 각각 시트, 미리 고른 값 없음.
+ */
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -8,7 +11,7 @@ import { useToast } from '@/components/toast';
 import { Button, Card, NumField, Pills, Row, Segmented, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
 import { knownExercises } from '@/lib/ability';
-import { recommendedVolume } from '@/lib/profile';
+import { latestBodyComp, recommendedVolume } from '@/lib/profile';
 import { GearPicker } from '@/components/gear-picker';
 import { gearOf, type Gear } from '@/lib/gear';
 import { GOAL_NAME, applyGoal, applyMode, applySchedule, needsChoice, startRows, type StartKey } from '@/lib/start';
@@ -23,21 +26,15 @@ function GoalSheet({ onDone }: { onDone: () => void }) {
   const p = s.profile;
   const [goal, setGoal] = useState<Goal | ''>(p.goal);
   const [years, setYears] = useState<Profile['years']>(p.years ?? '');
-  const [sex, setSex] = useState<Profile['sex']>(p.sex ?? '');
-  const [age, setAge] = useState<number | null>(p.age ?? null);
-  const rec = goal ? recommendedVolume({ ...p, goal, years, sex, age }).rec : null;
+  const rec = goal ? recommendedVolume({ ...p, goal, years }).rec : null;
   return (
     <>
       <View style={{ gap: 6 }}><T>목적</T><Pills options={GOALS} value={goal || null} onToggle={setGoal} /></View>
       <View style={{ gap: 6 }}><T>웨이트 경력 <T v="small">(선택)</T></T>
         <Segmented options={[{ v: '0', n: '1년 미만' }, { v: '1', n: '1~3년' }, { v: '3', n: '3년 이상' }]} value={years || null} onChange={(v) => setYears((v ?? '') as Profile['years'])} />
       </View>
-      <View style={{ gap: 6 }}><T>성별 <T v="small">(선택)</T></T>
-        <Segmented options={[{ v: 'm', n: '남성' }, { v: 'f', n: '여성' }]} value={sex || null} onChange={(v) => setSex((v ?? '') as Profile['sex'])} />
-      </View>
-      <NumField label="나이 (선택)" value={age} onCommit={setAge} />
       {rec ? <T v="small">이 목적이면 부위당 주 {rec.min}~{rec.max}세트로 시작해요. 운동 규칙에서 언제든 바꿀 수 있어요.</T> : null}
-      <Button label="저장" kind="primary" disabled={!goal} onPress={() => { if (goal) { update(applyGoal(s, { goal, years, sex, age })); onDone(); } }} />
+      <Button label="저장" kind="primary" disabled={!goal} onPress={() => { if (goal) { update(applyGoal(s, { goal, years })); onDone(); } }} />
     </>
   );
 }
@@ -62,6 +59,35 @@ function ScheduleSheet({ onDone }: { onDone: () => void }) {
       </View>
       <Button label="저장" kind="primary" disabled={days == null || gear == null} onPress={() => {
         update(applySchedule(s, { days, sessionMin: min, gear })); onDone();
+      }} />
+    </>
+  );
+}
+
+/** 몸 정보: 나이 · 키 · 체중(필수) + 성별(선택) → 칼로리·단백질 목표 */
+function BodySheet({ onDone, inbodyWeight }: { onDone: () => void; inbodyWeight: number | null }) {
+  const s = useData((x) => x.settings);
+  const update = useData((x) => x.updateSettings);
+  const p = s.profile;
+  const [age, setAge] = useState<number | null>(p.age ?? null);
+  const [height, setHeight] = useState<number | null>(p.height ?? null);
+  const [weight, setWeight] = useState<number | null>(p.weight ?? inbodyWeight ?? null);
+  const [sex, setSex] = useState<Profile['sex']>(p.sex ?? '');
+  const ok = !!age && !!height && !!weight;
+  return (
+    <>
+      <Row gap={Space.md} style={{ flexWrap: 'nowrap' }}>
+        <NumField label="나이" value={age} onCommit={setAge} style={{ flex: 1 }} />
+        <NumField label="키 cm" value={height} decimal onCommit={setHeight} style={{ flex: 1 }} />
+        <NumField label="체중 kg" value={weight} decimal onCommit={setWeight} style={{ flex: 1 }} />
+      </Row>
+      {inbodyWeight && !p.weight ? <T v="small">체중은 최근 인바디 값이에요.</T> : null}
+      <View style={{ gap: 6 }}><T>성별 <T v="small">(선택 · 기초대사 계산이 더 정확해져요)</T></T>
+        <Segmented options={[{ v: 'm', n: '남성' }, { v: 'f', n: '여성' }]} value={sex || null} onChange={(v) => setSex((v ?? '') as Profile['sex'])} />
+      </View>
+      <T v="small">체지방률이나 인바디는 MY → 신체 정보에서 더 넣을 수 있어요.</T>
+      <Button label="저장" kind="primary" disabled={!ok} onPress={() => {
+        update({ profile: { ...p, age, height, weight, sex } }); onDone();
       }} />
     </>
   );
@@ -94,36 +120,50 @@ function ModeSheet({ onDone }: { onDone: () => void }) {
   );
 }
 
-const TITLE: Record<Exclude<StartKey, 'ability'>, string> = { goal: '목적', schedule: '운동 일정·장비', mode: '운동 방식' };
+const TITLE: Record<Exclude<StartKey, 'ability'>, string> = { goal: '목적', schedule: '운동 일정·장비', body: '몸 정보', mode: '운동 방식' };
 
 export function StartCard() {
   const c = usePalette();
   const toast = useToast();
   const s = useData((x) => x.settings);
+  const bodyT = useData((x) => x.bodyComps);
   const update = useData((x) => x.updateSettings);
   const [open, setOpen] = useState<Exclude<StartKey, 'ability'> | null>(null);
-  const rows = startRows(s);
-  const done = rows.filter((r) => r.done).length;
+  const inbodyWeight = latestBodyComp(live(bodyT))?.weight ?? null;
+  const rows = startRows(s, inbodyWeight);
+  const need = rows.filter((r) => r.required);
+  const more = rows.filter((r) => !r.required);
+  const needDone = need.filter((r) => r.done).length;
   const close = () => setOpen(null);
   const saved = () => { toast('저장했어요'); close(); };
+
+  const row = (r: (typeof rows)[number]) => (
+    <Pressable key={r.key} accessibilityRole="button" accessibilityLabel={`${r.title} ${r.done ? r.summary : '미입력'}`}
+      onPress={() => (r.key === 'ability' ? router.push('/ability') : setOpen(r.key))}
+      style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: 10, borderTopWidth: 1, borderColor: c.line }}>
+      <Text style={{ fontSize: 18, color: r.done ? c.ok : c.muted }}>{r.done ? '✓' : '○'}</Text>
+      <View style={{ flex: 1 }}>
+        <T style={{ fontWeight: r.done ? '400' : '600' }}>{r.title}</T>
+        <T v="small" style={{ color: r.done ? c.muted : c.accent }}>→ {r.makes}</T>
+      </View>
+      <T v="small" style={{ color: r.done ? c.ink : c.muted, maxWidth: '45%' }} numberOfLines={1}>{r.done ? r.summary : '미입력'}</T>
+      <Text style={{ color: c.muted, fontSize: 18 }}>›</Text>
+    </Pressable>
+  );
 
   return (
     <Card style={{ gap: 0, borderColor: c.accent, borderWidth: 1.5 }}>
       <Row style={{ justifyContent: 'space-between', paddingBottom: Space.sm }}>
         <T v="title" style={{ fontSize: 17 }}>시작하기</T>
-        <T v="small">{done}/{rows.length}</T>
+        <T v="small">필수 {needDone}/{need.length}</T>
       </Row>
-      <T v="small" style={{ paddingBottom: Space.sm }}>{needsChoice(s) ? '목적과 운동 일정을 고르면 추천을 시작해요. 미리 정해 둔 기본값은 없어요.' : '나머지 둘은 고르면 추천이 더 잘 맞아요.'}</T>
-      {rows.map((r) => (
-        <Pressable key={r.key} accessibilityRole="button" accessibilityLabel={`${r.title} ${r.done ? r.summary : '미입력'}`}
-          onPress={() => (r.key === 'ability' ? router.push('/ability') : setOpen(r.key))}
-          style={{ flexDirection: 'row', alignItems: 'center', gap: Space.sm, paddingVertical: 12, borderTopWidth: 1, borderColor: c.line }}>
-          <Text style={{ fontSize: 18, color: r.done ? c.ok : c.muted }}>{r.done ? '✓' : '○'}</Text>
-          <T style={{ flex: 1, fontWeight: r.done ? '400' : '600' }}>{r.title}</T>
-          <T v="small" style={{ color: r.done ? c.ink : c.muted }} numberOfLines={1}>{r.done ? r.summary : '미입력'}</T>
-          <Text style={{ color: c.muted, fontSize: 18 }}>›</Text>
-        </Pressable>
-      ))}
+      <T v="small" style={{ paddingBottom: Space.sm }}>
+        {needDone === need.length ? '기본 루틴이 만들어졌어요. 아래 둘은 고르면 추천이 더 잘 맞아요.'
+          : '필수 3개를 고르면 오늘 운동과 영양 목표가 모두 만들어져요. 미리 정해 둔 기본값은 없어요.'}
+      </T>
+      {need.map(row)}
+      <T v="label" style={{ paddingTop: Space.md, paddingBottom: 4 }}>더 정확하게 (선택)</T>
+      {more.map(row)}
       {needsChoice(s) ? null : (
         <Row style={{ justifyContent: 'flex-end', paddingTop: Space.sm }}>
           <Button label="나중에 하기" kind="ghost" onPress={() => { update({ start: { ...(s.start ?? {}), skipped: true } }); router.navigate('/'); }} />
@@ -132,6 +172,7 @@ export function StartCard() {
       <Sheet open={!!open} title={open ? TITLE[open] : ''} onClose={close}>
         {open === 'goal' ? <GoalSheet onDone={saved} /> : null}
         {open === 'schedule' ? <ScheduleSheet onDone={saved} /> : null}
+        {open === 'body' ? <BodySheet onDone={saved} inbodyWeight={inbodyWeight} /> : null}
         {open === 'mode' ? <ModeSheet onDone={saved} /> : null}
       </Sheet>
     </Card>

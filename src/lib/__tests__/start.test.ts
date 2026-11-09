@@ -9,8 +9,9 @@ const fresh: Settings = { ...DEFAULT_SETTINGS, start: {} };
 describe('시작하기', () => {
   it('starts with nothing chosen', () => {
     expect(startRows(fresh).map((r) => [r.key, r.done, r.summary])).toEqual([
-      ['goal', false, null], ['schedule', false, null], ['ability', false, null], ['mode', false, null],
+      ['goal', false, null], ['schedule', false, null], ['body', false, null], ['ability', false, null], ['mode', false, null],
     ]);
+    expect(startRows(fresh).filter((r) => r.required).map((r) => r.key)).toEqual(['goal', 'schedule', 'body']);
     expect(startVisible(fresh)).toBe(true);
     expect(needsChoice(fresh)).toBe(true);
     expect(missingChoices(fresh)).toEqual(['목적', '운동 일정']);
@@ -48,5 +49,11 @@ describe('시작하기', () => {
     const r = { ...s, ...restart(s) } as Settings;
     expect(startVisible(r)).toBe(true);
     expect(r.profile.goal).toBe('');
+  });
+  it('몸 정보 is done with age, height and a weight (typed or 인바디)', () => {
+    const p = { ...fresh.profile, age: 30, height: 175 };
+    expect(startRows({ ...fresh, profile: p }).find((r) => r.key === 'body')?.done).toBe(false);
+    expect(startRows({ ...fresh, profile: p }, 74.2).find((r) => r.key === 'body')).toMatchObject({ done: true, summary: '30세 · 175cm · 74.2kg' });
+    expect(startRows({ ...fresh, profile: { ...p, weight: 70 } }).find((r) => r.key === 'body')?.done).toBe(true);
   });
 });

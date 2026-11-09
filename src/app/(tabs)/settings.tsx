@@ -67,6 +67,7 @@ export default function MyScreen() {
   const marks = Object.keys(s.exercisePrefs).length;
   const mode = s.planMode === 'routine' && routine && !routine.deleted ? routine.name : '자율형';
 
+  const inbodyW = latestBodyComp(live(bodyT))?.weight ?? null;
   const lifeValue = [s.life?.wake != null ? `기상 ${hhmm(s.life.wake)}` : null, `끼니 ${s.mealPlan.times.length}번`, s.life?.bed != null ? `취침 ${hhmm(s.life.bed)}` : null].filter(Boolean).join(' · ');
   const t = useMemo(() => dayTarget({ settings: s, comps: live(bodyT), logs: live(logsT), meals: live(mealsT) }, d0, d0), [s, bodyT, logsT, mealsT, d0]);
   const tr = useMemo(() => weeklyTrends({
@@ -160,10 +161,10 @@ export default function MyScreen() {
         </Pressable>
       ) : null}
 
-      {startVisible(s) ? <StartCard /> : null}
+      {startVisible(s, inbodyW) ? <StartCard /> : null}
 
       {/* 목적 */}
-      {startVisible(s) ? null : <Pressable accessibilityRole="button" accessibilityLabel="목표 바꾸기" onPress={() => router.push('/prefs/profile')}>
+      {startVisible(s, inbodyW) ? null : <Pressable accessibilityRole="button" accessibilityLabel="목표 바꾸기" onPress={() => router.push('/prefs/profile')}>
         <Card style={{ gap: 4 }}>
           <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
             <T v="title" style={{ fontSize: 17 }}>{GOAL[p.goal]}{p.days ? ` · 주 ${p.days}일` : ''} · {mode}</T>
