@@ -4,6 +4,8 @@ import { View } from 'react-native';
 import { FocusPicker } from '@/components/focus-picker';
 import { GearPicker } from '@/components/gear-picker';
 import { budgetMin, dirOf, focusOf, legacyGoal } from '@/lib/focus';
+import { SHORT } from '@/lib/strength';
+import { LIFT_SESSION_MIN, floorFor } from '@/lib/target';
 import { Disclosure } from '@/components/layout';
 import { SavePage } from '@/components/save-bar';
 import { useToast } from '@/components/toast';
@@ -44,6 +46,8 @@ export default function ProfilePrefs() {
       <Card>
         <T v="title" style={{ fontSize: 15 }}>목적</T>
         <FocusPicker focus={focusOf(p)} dir={dirOf(p)} budget={budgetMin(p)}
+          floor={s.program ? floorFor(s.program.priority ?? 'balance') : undefined}
+          reserved={s.program ? { min: s.program.perWeek * LIFT_SESSION_MIN, label: `${SHORT[s.program.lift]} ${s.program.target1rm}kg 목표 주 ${s.program.perWeek}회` } : null}
           onChange={(focus, weightDir) => setP({ focus, weightDir, goal: legacyGoal(focus, weightDir) })} />
       </Card>
 

@@ -1,12 +1,14 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Disclosure, Page } from '@/components/layout';
 import { useToast } from '@/components/toast';
 import { Button, Card, ConfirmButton, Meter, NumField, Pills, Row, Segmented, T } from '@/components/ui';
 import { Space, usePalette } from '@/constants/theme';
-import { today } from '@/lib/dates';
+import { addDays, today } from '@/lib/dates';
+import { budgetMin, dirOf, focusOf, legacyGoal } from '@/lib/focus';
+import { PRIORITY_NAME, PRIORITY_NOTE, defaultPriority, floorFor, leadText, priorityOptions, programFor, withFloor, type Priority } from '@/lib/target';
 import { SESSION_NAME, buildProgram, feasibility, type StrengthProgram } from '@/lib/progression';
 import { MAIN_LIFTS, RATIOS, SHORT, estimateFor, roundFor, type MainLift } from '@/lib/strength';
 import { library } from '@/lib/exercises';
@@ -14,6 +16,7 @@ import { useData } from '@/store/store';
 import { useProgram, useStrengthTable } from '@/store/strength';
 
 const r25 = (x: number) => Math.round(x / 2.5) * 2.5;
+const fmtDate = (d: string) => `${Number(d.slice(5, 7))}월 ${Number(d.slice(8, 10))}일`;
 
 /** 중량 프로그램: one main lift toward a target 1RM, plus what each lift implies for related exercises. */
 export default function Program() {
@@ -29,13 +32,22 @@ export default function Program() {
   const est = estimateFor(lift, table, overrides);
   const [cur, setCur] = useState<number | null>(null);
   const [target, setTarget] = useState<number | null>(null);
-  const [weeks, setWeeks] = useState(8);
-  const [perWeek, setPerWeek] = useState<1 | 2 | 3>(2);
+  // 기한 (weeks from today) and how the goal shares the week with the polygon
+  const [weeks, setWeeks] = useState(12);
+  const [pick, setPick] = useState<Priority | null>(null);
+  const priority = pick ?? defaultPriority(weeks);
   const start1rm = cur ?? (est ? r25(est.e1rm) : null);
   const goal = target ?? (start1rm ? r25(start1rm * 1.05) : null);
+  const p = settings.profile;
+  const deadline = addDays(today(), weeks * 7);
+  const opts = start1rm && goal && goal > start1rm
+    ? priorityOptions({ focus: focusOf(p), budget: budgetMin(p), years: p.years, start1rm, target1rm: goal, deadlineWeeks: weeks }) : null;
+  const chosen = opts?.find((o) => o.priority === priority) ?? null;
+  // plenty of time: the three ways come out the same, so there's nothing to choose
+  const same = !!opts && opts.every((o) => o.perWeek === opts[0].perWeek && o.focusMin === opts[0].focusMin);
 
-  const draft: StrengthProgram | null = start1rm && goal && goal > start1rm
-    ? { lift, start: today(), start1rm, target1rm: goal, weeks, perWeek } : null;
+  const draft: StrengthProgram | null = start1rm && goal && chosen
+    ? programFor(chosen, { lift, start: today(), start1rm, target1rm: goal }, deadline, weeks) : null;
   const plan = useMemo(() => (draft ? buildProgram(draft) : []), [draft?.lift, draft?.start1rm, draft?.target1rm, draft?.weeks, draft?.perWeek]); // eslint-disable-line react-hooks/exhaustive-deps
   const feas = draft ? feasibility(draft) : null;
 
@@ -63,7 +75,7 @@ export default function Program() {
       {state ? (
         <>
           <Card style={{ gap: Space.sm }}>
-            <T v="small">{SHORT[state.program.lift]} · {state.program.weeks}주 · 주 {state.program.perWeek}회</T>
+            <T v="small">{SHORT[state.program.lift]} · {state.program.weeks}주 · 주 {state.program.perWeek}회{state.program.priority ? ` · ${PRIORITY_NAME[state.program.priority]}` : ''}{state.program.deadline ? ` · 기한 ${fmtDate(state.program.deadline)}` : ''}</T>
             <T v="big" style={{ fontSize: 30, lineHeight: 36 }}>{state.program.start1rm} → {state.program.target1rm}kg</T>
             <Meter pct={state.next ? (state.next.doneCount / state.next.total) * 100 : 100} color={c.accent} />
             <T v="small">{state.next ? `${state.next.doneCount}/${state.next.total}회 완료 · ${state.next.session.week}주차` : '프로그램 완료'}</T>
@@ -101,20 +113,54 @@ export default function Program() {
               <NumField label="현재 1RM (kg)" value={start1rm} onCommit={setCur} decimal />
               <NumField label="목표 (kg)" value={goal} onCommit={setTarget} decimal />
             </Row>
-            <Segmented options={[6, 8, 12, 16].map((w) => ({ v: String(w), n: `${w}주` }))} value={String(weeks)} onChange={(v) => v && setWeeks(Number(v))} />
-            <Segmented options={[1, 2, 3].map((n) => ({ v: String(n), n: `주 ${n}회` }))} value={String(perWeek)} onChange={(v) => v && setPerWeek(Number(v) as 1 | 2 | 3)} />
+            <View style={{ gap: 6 }}>
+              <T v="muted">기한 · {fmtDate(deadline)}까지</T>
+              <Segmented options={[6, 8, 12, 16, 24].map((w) => ({ v: String(w), n: `${w}주` }))} value={String(weeks)} onChange={(v) => v && setWeeks(Number(v))} />
+            </View>
             {feas ? (
-              <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
-                <T v="small" style={{ flexShrink: 1, color: feas.level === 'ok' ? c.ok : feas.level === 'hard' ? c.warn : c.bad }}>
-                  월 +{feas.perMonthPct.toFixed(1)}% · {feas.level === 'ok' ? '현실적인 목표' : feas.level === 'hard' ? '빠듯해요' : '이 기간엔 어려워요'}
-                </T>
-                {feas.level !== 'ok' ? <Button label={`${Math.min(24, feas.weeksFor(2.5))}주로`} kind="ghost" onPress={() => setWeeks(Math.min(24, feas.weeksFor(2.5)))} /> : null}
-              </Row>
+              <T v="small" style={{ color: feas.level === 'ok' ? c.ok : feas.level === 'hard' ? c.warn : c.bad }}>
+                월 +{feas.perMonthPct.toFixed(1)}% · {feas.level === 'ok' ? '현실적인 목표' : feas.level === 'hard' ? '빠듯해요' : '이 기간엔 어려워요'}
+              </T>
             ) : null}
-            <Button label="프로그램 시작" kind="primary" disabled={!draft} onPress={() => {
+            {opts ? (
+              <View style={{ gap: 6 }}>
+                <T v="muted">목표와 평소 운동(다각형) 중 먼저 챙길 것</T>
+                {same ? (
+                  <View style={{ padding: Space.md, borderRadius: 10, backgroundColor: c.okSoft, gap: 2 }}>
+                    <T style={{ fontWeight: '700', color: c.ok }}>일정에 둘 다 들어가요 · {opts[0].onTime ? '기한 안에' : `약 ${opts[0].weeks}주`}</T>
+                    <T v="small">주 {opts[0].perWeek}회 ({opts[0].goalMin}분){opts[0].lead ? ` · 평소 운동 ${opts[0].focusMin}분 → ${leadText(opts[0])}` : ''}. 시간이 부족해지면 {PRIORITY_NAME[priority]}으로 나눠요.</T>
+                  </View>
+                ) : opts.filter((o, i) => !opts.slice(0, i).some((e) => e.perWeek === o.perWeek && e.focusMin === o.focusMin)).map((o) => {
+                  // identical outcomes are shown once, under both names
+                  const twins = opts.filter((e) => e !== o && e.perWeek === o.perWeek && e.focusMin === o.focusMin);
+                  const sel = o.priority === priority || twins.some((t) => t.priority === priority);
+                  return (
+                    <Pressable key={o.priority} accessibilityRole="radio" accessibilityState={{ checked: sel }} onPress={() => setPick(o.priority)}
+                      style={{ padding: Space.md, borderRadius: 10, borderWidth: sel ? 2 : 1, borderColor: sel ? c.accent : c.line, backgroundColor: sel ? c.accentSoft : c.surface, gap: 2 }}>
+                      <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+                        <T style={{ fontWeight: '800', color: sel ? c.accent : c.ink }}>{[o, ...twins].map((x) => PRIORITY_NAME[x.priority]).join(' = ')}{[o, ...twins].some((x) => x.priority === defaultPriority(weeks)) ? ' · 추천' : ''}</T>
+                        <T v="small" style={{ fontWeight: '700', color: o.onTime ? c.ok : c.warn }}>{o.onTime ? '기한 안에' : `약 ${o.weeks}주`}</T>
+                      </Row>
+                      <T v="small">주 {o.perWeek}회 ({o.goalMin}분){o.lead ? ` · 평소 운동 ${o.focusMin}분 → ${leadText(o)}` : ''}</T>
+                      {sel ? <T v="small">{PRIORITY_NOTE[o.priority]}</T> : null}
+                      {o.tooTight ? <T v="small" style={{ color: c.bad }}>유지량만으로도 일정이 넘쳐요. 운동 일정을 늘리거나 다각형 축을 줄여 주세요.</T> : null}
+                    </Pressable>
+                  );
+                })}
+                {opts[0] && !opts[0].onTime ? (
+                  <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+                    <T v="small" style={{ color: c.warn, flexShrink: 1 }}>주 3회로도 {weeks}주 안엔 어려워요 (약 {opts[0].weeks}주).</T>
+                    {opts[0].weeks <= 24 ? <Button label={`기한 ${[16, 24].find((w) => w >= opts[0].weeks) ?? 24}주로`} kind="ghost" onPress={() => setWeeks([16, 24].find((w) => w >= opts[0].weeks) ?? 24)} /> : null}
+                  </Row>
+                ) : null}
+                <T v="small">어느 쪽이든 유지량은 지켜요: 다각형에서 고른 축은 최소 1단계, 목표는 최소 주 1회. 근력 축은 {priority === 'focus' ? '1' : '2'}단계 아래로 안 내려가요.</T>
+              </View>
+            ) : null}
+            <Button label="목표 시작" kind="primary" disabled={!draft} onPress={() => {
               if (!draft) return;
-              update({ program: { ...draft, startAt: Date.now() } });
-              toast('오늘 할 일에 프로그램 운동이 들어가요');
+              const focus = withFloor(focusOf(p), floorFor(priority));
+              update({ program: draft, profile: { ...p, focus, goal: legacyGoal(focus, dirOf(p)) || p.goal } });
+              toast('오늘 할 일에 목표 운동이 들어가요');
               router.back();
             }} />
           </Card>

@@ -69,10 +69,15 @@ export interface WorkPlan {
 
 const tgt = (f: Focus, k: FocusKey) => LEVEL_MIN[k][f[k]];
 
-/** the least total time that reaches every axis' target (small LP, solved by its corners) */
-export function planWork(f: Focus, budget: number | null = null): WorkPlan {
-  const Th = tgt(f, 'hyp'), Ts = tgt(f, 'str'), Tf = tgt(f, 'fit'), Tg = tgt(f, 'health');
-  const m0 = Th * SPECIFIC.hyp, h0 = Ts * SPECIFIC.str;
+/**
+ * The least total time that reaches every axis' target (small LP, solved by its corners).
+ * `prior` = work already booked elsewhere (a 목표's lift sessions): it counts toward the axes, not toward `total`.
+ */
+export function planWork(f: Focus, budget: number | null = null, prior: Partial<Record<WorkKey, number>> = {}): WorkPlan {
+  const pre = (k: FocusKey) => (Object.keys(prior) as WorkKey[]).reduce((a, w) => a + (prior[w] ?? 0) * EFFECT[w][k], 0);
+  const Th = Math.max(0, tgt(f, 'hyp') - pre('hyp')), Ts = Math.max(0, tgt(f, 'str') - pre('str'));
+  const Tf = Math.max(0, tgt(f, 'fit') - pre('fit')), Tg = tgt(f, 'health');
+  const m0 = Math.max(0, tgt(f, 'hyp') * SPECIFIC.hyp - (prior.mod ?? 0)), h0 = Math.max(0, tgt(f, 'str') * SPECIFIC.str - (prior.heavy ?? 0));
   const ok = (m: number, h: number) => m >= m0 - 1e-6 && h >= h0 - 1e-6 && m + EFFECT.heavy.hyp * h >= Th - 1e-6 && h + EFFECT.mod.str * m >= Ts - 1e-6;
   const cands: [number, number][] = [];
   { const m = Math.max(m0, Th - EFFECT.heavy.hyp * h0); cands.push([m, Math.max(h0, Ts - EFFECT.mod.str * m)]); }
@@ -80,21 +85,22 @@ export function planWork(f: Focus, budget: number | null = null): WorkPlan {
   { const m = (Th - EFFECT.heavy.hyp * Ts) / (1 - EFFECT.heavy.hyp * EFFECT.mod.str); cands.push([m, Ts - EFFECT.mod.str * m]); }
   const [m, h] = cands.filter(([a, b]) => ok(a, b)).sort((a, b) => a[0] + a[1] - (b[0] + b[1]))[0] ?? [Math.max(m0, Th), Math.max(h0, Ts)];
   const c = Tf * SPECIFIC.fit;
-  const g = Tg ? Math.max(Tg * SPECIFIC.health, Tg - EFFECT.mod.health * m - EFFECT.heavy.health * h - EFFECT.cardio.health * c) : 0;
+  const g = Tg ? Math.max(Tg * SPECIFIC.health, Tg - pre('health') - EFFECT.mod.health * m - EFFECT.heavy.health * h - EFFECT.cardio.health * c) : 0;
   const work = { mod: m, heavy: h, cardio: c, mobility: g };
   const total = m + h + c + g;
   const scale = budget && total > budget ? budget / total : 1;
   const effect = {} as Record<FocusKey, number>;
   // what carries over from other work only goes so far (근비대 운동만으로는 근력 1.5단계까지)
   for (const k of FOCUS_KEYS) {
-    const own = work[OWN[k]] * EFFECT[OWN[k]][k];
-    const carry = (Object.keys(work) as WorkKey[]).filter((w) => w !== OWN[k]).reduce((a, w) => a + work[w] * EFFECT[w][k], 0);
-    effect[k] = (own + Math.min(carry, (1 - SPECIFIC[k]) * LEVEL_MIN[k][3])) * scale;
+    const all = (w: WorkKey) => work[w] * scale + (prior[w] ?? 0);
+    const own = all(OWN[k]) * EFFECT[OWN[k]][k];
+    const carry = (Object.keys(work) as WorkKey[]).filter((w) => w !== OWN[k]).reduce((a, w) => a + all(w) * EFFECT[w][k], 0);
+    effect[k] = own + Math.min(carry, (1 - SPECIFIC[k]) * LEVEL_MIN[k][3]);
   }
   const r = (x: number) => Math.round(x);
   return {
     work: { mod: r(m * scale), heavy: r(h * scale), cardio: r(c * scale), mobility: r(g * scale) },
-    total: r(total), naive: Th + Ts + Tf + Tg, effect, scale,
+    total: r(total), naive: tgt(f, 'hyp') + tgt(f, 'str') + tgt(f, 'fit') + tgt(f, 'health'), effect, scale,
   };
 }
 

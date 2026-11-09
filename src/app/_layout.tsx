@@ -55,7 +55,7 @@ export default function RootLayout() {
               <Stack.Screen name="(tabs)" />
               <Stack.Screen name="session" options={{ gestureEnabled: false }} />
               <Stack.Screen name="session-guide" options={{ headerShown: true, title: '음성 가이드' }} />
-              <Stack.Screen name="program" options={{ headerShown: true, title: '중량 프로그램' }} />
+              <Stack.Screen name="program" options={{ headerShown: true, title: '중량 목표' }} />
               <Stack.Screen name="routine" options={{ headerShown: true, title: '운동 방식' }} />
               <Stack.Screen name="routine-edit" options={{ headerShown: true, title: '루틴 편집' }} />
               <Stack.Screen name="ability" options={{ headerShown: true, title: '할 수 있는 운동 체크' }} />

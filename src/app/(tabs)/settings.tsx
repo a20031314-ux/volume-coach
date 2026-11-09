@@ -9,7 +9,7 @@ import { Pressable, Text } from 'react-native';
 
 import { Group, ListRow, Sheet } from '@/components/layout';
 import { DetailRow, Spark, TrendCard, type Tone } from '@/components/trend-card';
-import { Button, Card, Row, Screen, Segmented, T } from '@/components/ui';
+import { Button, Card, Row, Screen, Segmented, T, Meter } from '@/components/ui';
 import { WeekView } from '@/components/week-view';
 import { Space, usePalette } from '@/constants/theme';
 import { HEALTH_NAME } from '@/health/steps';
@@ -25,6 +25,8 @@ import type { Goal } from '@/lib/types';
 import { StartCard } from '@/components/start-card';
 import { useToast } from '@/components/toast';
 import { focusLabel } from '@/lib/focus';
+import { PRIORITY_NAME } from '@/lib/target';
+import { useProgram } from '@/store/strength';
 import { restart, startVisible } from '@/lib/start';
 import { useAuth } from '@/store/auth';
 import { live, useData } from '@/store/store';
@@ -67,6 +69,7 @@ export default function MyScreen() {
   const marks = Object.keys(s.exercisePrefs).length;
   const mode = s.planMode === 'routine' && routine && !routine.deleted ? routine.name : '자율형';
 
+  const prog = useProgram();
   const inbodyW = latestBodyComp(live(bodyT))?.weight ?? null;
   const lifeValue = [s.life?.wake != null ? `기상 ${hhmm(s.life.wake)}` : null, `끼니 ${s.mealPlan.times.length}번`, s.life?.bed != null ? `취침 ${hhmm(s.life.bed)}` : null].filter(Boolean).join(' · ');
   const t = useMemo(() => dayTarget({ settings: s, comps: live(bodyT), logs: live(logsT), meals: live(mealsT) }, d0, d0), [s, bodyT, logsT, mealsT, d0]);
@@ -174,6 +177,20 @@ export default function MyScreen() {
         </Card>
       </Pressable>}
 
+      {/* 목표 (기한 있는 구체 목표) */}
+      {prog ? (
+        <Pressable accessibilityRole="button" onPress={() => router.push('/program')}>
+          <Card style={{ gap: 4 }}>
+            <Row style={{ justifyContent: 'space-between', flexWrap: 'nowrap' }}>
+              <T v="title" style={{ fontSize: 16 }}>🎯 {SHORT[prog.program.lift]} {prog.program.start1rm} → {prog.program.target1rm}kg</T>
+              <Text style={{ color: c.muted, fontSize: 18 }}>›</Text>
+            </Row>
+            <Meter pct={prog.next ? (prog.next.doneCount / prog.next.total) * 100 : 100} color={c.accent} />
+            <T v="small">{[prog.next ? `${prog.next.doneCount}/${prog.next.total}회` : '완료', prog.program.deadline ? `${Number(prog.program.deadline.slice(5, 7))}/${Number(prog.program.deadline.slice(8))}까지` : `${prog.program.weeks}주`, prog.program.priority ? PRIORITY_NAME[prog.program.priority] : null].filter(Boolean).join(' · ')}</T>
+          </Card>
+        </Pressable>
+      ) : null}
+
       {/* 추세 */}
       <Row style={{ justifyContent: 'space-between', alignItems: 'center', marginTop: Space.sm }}>
         <T v="label">추세</T>
@@ -190,7 +207,7 @@ export default function MyScreen() {
       </Group>
 
       <Group title="계획">
-        <ListRow label="운동 방식" value={`${mode}${s.program ? ` + ${SHORT[s.program.lift]} 프로그램` : ''}`} onPress={() => router.push('/routine')} />
+        <ListRow label="운동 방식" value={`${mode}${s.program ? ` + ${SHORT[s.program.lift]} 목표` : ''}`} onPress={() => router.push('/routine')} />
         <ListRow label="운동 규칙" value={`주 ${s.min}~${s.max}세트${s.deload ? ' · 디로드' : ''}`} onPress={() => router.push('/prefs/rules')} />
         <ListRow label="운동 목록" value={marks ? `표시 ${marks}개` : undefined} onPress={() => router.push('/exercises')} last />
       </Group>

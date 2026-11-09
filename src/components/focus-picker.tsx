@@ -44,14 +44,14 @@ export function FocusRadar({ focus, effect, size = SIZE }: { focus: Focus; effec
   );
 }
 
-function Dots({ value, onChange, label }: { value: Level; onChange: (v: Level) => void; label: string }) {
+function Dots({ value, onChange, label, min = 0 }: { value: Level; onChange: (v: Level) => void; label: string; min?: number }) {
   const c = usePalette();
   return (
     <Row gap={6} style={{ flexWrap: 'nowrap' }}>
       {([1, 2, 3] as Level[]).map((n) => (
         <Pressable key={n} accessibilityRole="button" accessibilityLabel={`${label} ${n}단계`} accessibilityState={{ selected: value >= n }}
-          onPress={() => onChange(value === n ? ((n - 1) as Level) : n)} hitSlop={6}
-          style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: c.accent, backgroundColor: value >= n ? c.accent : 'transparent' }} />
+          onPress={() => onChange(Math.max(min, value === n ? n - 1 : n) as Level)} hitSlop={6}
+          style={{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: n <= min ? c.warn : c.accent, backgroundColor: value >= n ? (n <= min ? c.warn : c.accent) : 'transparent' }} />
       ))}
     </Row>
   );
@@ -60,12 +60,17 @@ function Dots({ value, onChange, label }: { value: Level; onChange: (v: Level) =
 const WORK_ORDER: WorkKey[] = ['mod', 'heavy', 'cardio', 'mobility'];
 const lv = (x: number) => (Math.round(x * 2) / 2).toString();
 
-export function FocusPicker({ focus, dir, budget, onChange }: {
+export function FocusPicker({ focus, dir, budget, onChange, floor, reserved }: {
   focus: Focus; dir: WeightDir | null; budget: number | null;
   onChange: (f: Focus, dir: WeightDir | null) => void;
+  /** 목표가 정한 바닥 (e.g. 근력 2) */
+  floor?: Partial<Focus>;
+  /** minutes a goal takes first, and what it is */
+  reserved?: { min: number; label: string } | null;
 }) {
   const c = usePalette();
-  const plan = planWork(focus, budget);
+  const left = budget != null && reserved ? Math.max(0, budget - reserved.min) : budget;
+  const plan = planWork(focus, left, reserved ? { heavy: reserved.min } : {});
   const set = (k: FocusKey, v: Level) => onChange({ ...focus, [k]: v }, dir);
   const saved = plan.naive - plan.total;
   return (
@@ -85,26 +90,27 @@ export function FocusPicker({ focus, dir, budget, onChange }: {
             <Row key={k} style={{ flexWrap: 'nowrap', alignItems: 'center', paddingVertical: 6, borderTopWidth: 1, borderColor: c.line }}>
               <View style={{ flex: 1 }}>
                 <T style={{ fontWeight: '700' }}>{FOCUS_NAME[k]}</T>
-                <T v="small">{focus[k] ? LEVEL_NOTE[k][focus[k] - 1] : '안 고름'}
+                <T v="small">{floor?.[k] ? <T v="small" style={{ color: c.warn }}>{`🎯 목표 때문에 최소 ${floor[k]} · `}</T> : null}{focus[k] ? LEVEL_NOTE[k][focus[k] - 1] : '안 고름'}
                   {extra >= 0.5 ? <T v="small" style={{ color: c.ok }}>{`  · 다른 운동으로 ${lv(Math.min(3, got))}단계까지 따라와요`}</T> : null}
                   {extra <= -0.5 ? <T v="small" style={{ color: c.warn }}>{`  · 일정 안에선 ${lv(got)}단계`}</T> : null}
                 </T>
               </View>
-              <Dots value={focus[k]} label={FOCUS_NAME[k]} onChange={(v) => set(k, v)} />
+              <Dots value={focus[k]} label={FOCUS_NAME[k]} min={floor?.[k] ?? 0} onChange={(v) => set(k, v)} />
             </Row>
           );
         })}
       </View>
       <View style={{ gap: 4, padding: Space.md, borderRadius: 10, backgroundColor: plan.scale < 1 ? c.warnSoft : c.accentSoft }}>
         <T style={{ fontWeight: '700', color: plan.scale < 1 ? c.warn : c.accent }}>
-          필요한 시간 주 {plan.total}분{budget ? ` · 일정 주 ${budget}분` : ''}
+          필요한 시간 주 {plan.total}분{left != null ? ` · ${reserved ? '목표 빼고 남은' : '일정'} 주 ${left}분` : ''}
         </T>
+        {reserved ? <T v="small">🎯 {reserved.label} {reserved.min}분을 일정 {budget}분에서 먼저 뺐어요. 이 운동도 근력·근비대에 쌓여요.</T> : null}
         {saved >= 5 ? <T v="small">따로 하면 {plan.naive}분인데, 겹치는 효과로 {saved}분 줄었어요.</T> : null}
         {plan.total ? <T v="small">{WORK_ORDER.filter((w) => plan.work[w] > 0).map((w) => `${WORK_NAME[w]} ${plan.work[w]}분`).join(' · ')}{plan.scale < 1 ? ' (일정에 맞춘 값)' : ''}</T> : null}
         <T v="small">
           {!budget ? `운동 일정을 고르면 그 시간에 맞춰요. 모든 축 3(꽉 찬 다각형) = 주 ${FULL_MIN}분.`
-            : plan.scale < 1 ? `일정보다 많아서 ${Math.round(plan.scale * 100)}%로 줄여 짜요. 축을 낮추거나 일정을 늘리면 다 챙길 수 있어요.`
-            : plan.total ? `일정 안에 들어가요${budget - plan.total >= 10 ? `. 남는 ${budget - plan.total}분만큼 운동이 짧아져요` : ''}.` : ''}
+            : left != null && plan.scale < 1 ? `남은 시간보다 많아서 ${Math.round(plan.scale * 100)}%로 줄여 짜요. 축을 낮추거나 일정을 늘리면 다 챙길 수 있어요.`
+            : plan.total && left != null ? `일정 안에 들어가요${left - plan.total >= 10 ? `. 남는 ${left - plan.total}분만큼 운동이 짧아져요` : ''}.` : ''}
         </T>
       </View>
       <View style={{ gap: 6 }}>

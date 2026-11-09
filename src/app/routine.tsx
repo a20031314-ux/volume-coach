@@ -55,7 +55,7 @@ export default function RoutineHub() {
         onChange={(v) => v && update({ planMode: v })} />
 
       <Group>
-        <ListRow label="중량 프로그램" value={s.program ? `${SHORT[s.program.lift]} → ${s.program.target1rm}kg` : '꺼짐 · 자율형·루틴형에 더해서'} onPress={() => router.push('/program')} last />
+        <ListRow label="중량 목표" value={s.program ? `${SHORT[s.program.lift]} → ${s.program.target1rm}kg` : '없음 · 자율형·루틴형에 더해서'} onPress={() => router.push('/program')} last />
       </Group>
 
       {s.planMode === 'auto' ? (

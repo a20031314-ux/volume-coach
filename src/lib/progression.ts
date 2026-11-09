@@ -14,6 +14,9 @@ export interface StrengthProgram {
   target1rm: number;
   weeks: number;
   perWeek: 1 | 2 | 3;
+  /** 목표 기한 (YYYY-MM-DD) and how it shares the week with the polygon */
+  deadline?: string;
+  priority?: 'goal' | 'balance' | 'focus';
 }
 
 export interface ProgramSession {
